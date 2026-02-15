@@ -308,6 +308,16 @@ const api = {
   superPanelLaunch: (command: any) => ipcRenderer.invoke('super-panel:launch', command),
   superPanelReady: () => ipcRenderer.send('super-panel:ready'),
   superPanelShowPinned: () => ipcRenderer.send('super-panel:show-pinned'),
+  // 悬浮球
+  floatingBall: {
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('floating-ball:set-enabled', enabled),
+    getEnabled: () => ipcRenderer.invoke('floating-ball:get-enabled')
+  },
+  onFloatingBallFiles: (
+    callback: (files: Array<{ path: string; name: string; isDirectory: boolean }>) => void
+  ) => {
+    ipcRenderer.on('floating-ball-files', (_event, files) => callback(files))
+  },
   updateSuperPanelPinnedOrder: (commands: any[]) =>
     ipcRenderer.invoke('super-panel:update-pinned-order', commands),
   unpinSuperPanelCommand: (path: string, featureCode?: string) =>
@@ -541,6 +551,14 @@ declare global {
         update: (model: any) => Promise<{ success: boolean; error?: string }>
         delete: (modelId: string) => Promise<{ success: boolean; error?: string }>
       }
+      // 悬浮球
+      floatingBall: {
+        setEnabled: (enabled: boolean) => Promise<{ success: boolean }>
+        getEnabled: () => Promise<boolean>
+      }
+      onFloatingBallFiles: (
+        callback: (files: Array<{ path: string; name: string; isDirectory: boolean }>) => void
+      ) => void
     }
   }
 }

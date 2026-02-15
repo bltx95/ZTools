@@ -453,6 +453,24 @@
       </div>
     </div>
 
+    <!-- 悬浮球设置 -->
+    <div class="setting-item">
+      <div class="setting-label">
+        <span>显示悬浮球</span>
+        <span class="setting-desc">在桌面显示一个置顶悬浮球，点击可快速启动/隐藏主界面，支持拖入文件到悬浮球</span>
+      </div>
+      <div class="setting-control">
+        <label class="toggle">
+          <input
+            v-model="floatingBallEnabled"
+            type="checkbox"
+            @change="handleFloatingBallChange"
+          />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
     <!-- 开机启动设置 -->
     <div class="setting-item">
       <div class="setting-label">
@@ -683,6 +701,9 @@ const windowDefaultHeight = ref(541)
 
 // 托盘图标显示设置
 const showTrayIcon = ref(true)
+
+// 悬浮球设置
+const floatingBallEnabled = ref(false)
 
 // 开机启动设置
 const launchAtLogin = ref(false)
@@ -1122,6 +1143,18 @@ async function handleTrayIconChange(): Promise<void> {
   }
 }
 
+// 处理悬浮球开关变化
+async function handleFloatingBallChange(): Promise<void> {
+  try {
+    await window.ztools.internal.setFloatingBallEnabled(floatingBallEnabled.value)
+    console.log('悬浮球设置已更新:', floatingBallEnabled.value)
+  } catch (err) {
+    console.error('更新悬浮球设置失败:', err)
+    // 恢复状态
+    floatingBallEnabled.value = !floatingBallEnabled.value
+  }
+}
+
 // 处理窗口材质变化
 async function handleWindowMaterialChange(): Promise<void> {
   try {
@@ -1448,6 +1481,9 @@ async function loadSettings(): Promise<void> {
       // 插件市场配置
       pluginMarketCustom.value = data.pluginMarketCustom ?? false
       pluginMarketUrl.value = data.pluginMarketUrl ?? ''
+
+      // 悬浮球配置
+      floatingBallEnabled.value = data.floatingBallEnabled ?? false
 
       // 加载自定义颜色
       if (data.customColor) {

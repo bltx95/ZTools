@@ -8,6 +8,7 @@ import { promisify } from 'util'
 import api from './api/index'
 import appWatcher from './appWatcher'
 import detachedWindowManager from './core/detachedWindowManager'
+import floatingBallManager from './core/floatingBallManager'
 import { loadInternalPlugins } from './core/internalPluginLoader'
 
 import crypto from 'crypto'
@@ -199,6 +200,9 @@ app.whenReady().then(async () => {
 
   // 创建系统托盘
   windowManager.createTray()
+
+  // 初始化悬浮球（从配置决定是否显示）
+  floatingBallManager.init()
 })
 
 app.on('window-all-closed', () => {
@@ -211,6 +215,8 @@ app.on('will-quit', () => {
   windowManager.unregisterAllShortcuts()
   // 停止应用目录监听
   appWatcher.stop()
+  // 清理悬浮球
+  floatingBallManager.cleanup()
 })
 
 app.on('before-quit', (event) => {

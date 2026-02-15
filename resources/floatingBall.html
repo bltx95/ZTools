@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* 外层容器：承载渐变边框 + 旋转动画 */
+    .floating-ball {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      position: relative;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+      /* 渐变边框通过伪元素实现 */
+    }
+
+    /* 渐变彩色边框（AI 风格） */
+    .floating-ball::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      padding: 3px; /* 边框宽度 */
+      background: conic-gradient(
+        from 0deg,
+        #f43f5e,
+        #ec4899,
+        #a855f7,
+        #6366f1,
+        #3b82f6,
+        #06b6d4,
+        #10b981,
+        #eab308,
+        #f97316,
+        #f43f5e
+      );
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      transition: transform 0.15s ease;
+      /* 默认不旋转 */
+      animation: none;
+    }
+
+    /* hover 时边框旋转 */
+    .floating-ball:hover::before {
+      animation: border-spin 2s linear infinite;
+    }
+
+    @keyframes border-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* 内圆：半透明灰色背景 */
+    .floating-ball-inner {
+      position: absolute;
+      inset: 3px; /* 与边框宽度一致 */
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 字母 Z */
+    .floating-ball-letter {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      color: #000;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    /* 按下缩小 */
+    .floating-ball.pressing {
+      transform: scale(0.92);
+    }
+
+    /* 拖拽中 */
+    .floating-ball.dragging {
+      transform: scale(1.0);
+      opacity: 0.8;
+      transition: none;
+    }
+    .floating-ball.dragging::before {
+      animation: border-spin 2s linear infinite;
+    }
+
+    /* 文件拖入悬停效果 */
+    .floating-ball.file-hover::before {
+      animation: border-spin 1s linear infinite;
+    }
+    .floating-ball.file-hover .floating-ball-inner {
+      background: rgba(80, 130, 255, 0.55);
+    }
+  </style>
+</head>
+<body>
+  <div class="floating-ball" id="ball">
+    <div class="floating-ball-inner">
+      <span class="floating-ball-letter">Z</span>
+    </div>
+  </div>
+  <script>
+    const { ipcRenderer, webUtils } = require('electron')
+    const path = require('path')
+    const fs = require('fs')
+    const ball = document.getElementById('ball')
+
+    // ==================== 悬浮球移动（点击 + 拖拽） ====================
+    let isMouseDown = false
+    let isDragging = false
+    let startScreenX = 0
+    let startScreenY = 0
+    const DRAG_THRESHOLD = 5
+
+    ball.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return
+      isMouseDown = true
+      isDragging = false
+      startScreenX = e.screenX
+      startScreenY = e.screenY
+      ball.classList.add('pressing')
+      ball.classList.remove('dragging')
+    })
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isMouseDown) return
+      const dx = e.screenX - startScreenX
+      const dy = e.screenY - startScreenY
+      if (!isDragging && Math.sqrt(dx * dx + dy * dy) >= DRAG_THRESHOLD) {
+        isDragging = true
+        ball.classList.remove('pressing')
+        ball.classList.add('dragging')
+        ipcRenderer.send('floating-ball-drag-start', {
+          mouseScreenX: e.screenX,
+          mouseScreenY: e.screenY
+        })
+      }
+      if (isDragging) {
+        ipcRenderer.send('floating-ball-dragging', {
+          screenX: e.screenX,
+          screenY: e.screenY
+        })
+      }
+    })
+
+    document.addEventListener('mouseup', () => {
+      if (!isMouseDown) return
+      isMouseDown = false
+      ball.classList.remove('pressing')
+      ball.classList.remove('dragging')
+      if (isDragging) {
+        isDragging = false
+        ipcRenderer.send('floating-ball-drag-end')
+      } else {
+        ipcRenderer.send('floating-ball-click')
+      }
+    })
+
+    // 右键菜单
+    ball.addEventListener('contextmenu', (e) => {
+      e.preventDefault()
+      ipcRenderer.send('floating-ball-contextmenu')
+    })
+
+    // ==================== 文件拖放（从 Finder / 资源管理器拖入文件） ====================
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy'
+      }
+      ball.classList.add('file-hover')
+    })
+
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      ball.classList.remove('file-hover')
+    })
+
+    document.addEventListener('drop', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      ball.classList.remove('file-hover')
+
+      const files = e.dataTransfer && e.dataTransfer.files
+      if (!files || files.length === 0) return
+
+      // 收集文件信息（Electron 32+ 必须用 webUtils.getPathForFile 获取路径）
+      const fileItems = []
+      for (let i = 0; i < files.length; i++) {
+        const filePath = webUtils.getPathForFile(files[i])
+        if (!filePath) continue
+        try {
+          const stat = fs.statSync(filePath)
+          fileItems.push({
+            path: filePath,
+            name: path.basename(filePath),
+            isDirectory: stat.isDirectory()
+          })
+        } catch (err) {
+          console.warn('无法读取文件信息:', filePath, err)
+        }
+      }
+
+      if (fileItems.length > 0) {
+        ipcRenderer.send('floating-ball-file-drop', fileItems)
+      }
+    })
+  </script>
+</body>
+</html>

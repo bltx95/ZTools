@@ -632,6 +632,20 @@ onMounted(async () => {
     window.ztools.launch(launchOptions)
   })
 
+  // 监听悬浮球文件拖放事件
+  window.ztools.onFloatingBallFiles((files) => {
+    console.log('收到悬浮球文件拖放:', files)
+    // 切换到搜索视图
+    currentView.value = ViewMode.Search
+    // 设置粘贴文件数据（效果等同于复制文件后粘贴）
+    pastedFilesData.value = files
+    // 聚焦搜索框
+    nextTick(() => {
+      searchBoxRef.value?.focus()
+    })
+    updateWindowHeight()
+  })
+
   // 监听插件重定向搜索事件
   window.ztools.onRedirectSearch((data) => {
     console.log('收到重定向搜索事件:', data)

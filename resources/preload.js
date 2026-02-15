@@ -600,7 +600,13 @@ window.ztools = {
         await electron.ipcRenderer.invoke('internal:ai-models-update', model),
       delete: async (modelId) =>
         await electron.ipcRenderer.invoke('internal:ai-models-delete', modelId)
-    }
+    },
+
+    // ==================== 悬浮球 API ====================
+    setFloatingBallEnabled: async (enabled) =>
+      await electron.ipcRenderer.invoke('floating-ball:set-enabled', enabled),
+    getFloatingBallEnabled: async () =>
+      await electron.ipcRenderer.invoke('floating-ball:get-enabled')
   }
 }
 
