@@ -208,9 +208,14 @@
       <PluginDetail
         v-if="isDetailVisible && selectedPlugin"
         :plugin="selectedPlugin"
+        :is-running="isPluginRunning(selectedPlugin.path)"
         @back="closePluginDetail"
         @open="handleOpenPlugin(selectedPlugin)"
         @uninstall="handleUninstallFromDetail(selectedPlugin)"
+        @kill="handleKillPlugin(selectedPlugin)"
+        @open-folder="handleOpenFolder(selectedPlugin)"
+        @package="handlePackagePlugin(selectedPlugin)"
+        @reload="handleReloadPluginFromDetail(selectedPlugin)"
       />
     </Transition>
   </div>
@@ -453,6 +458,32 @@ async function handleReloadPlugin(plugin: any): Promise<void> {
       // 重新加载插件列表
       await loadPlugins()
       // 注意：插件重载后，主程序会自动刷新指令列表
+      success('插件重载成功!')
+    } else {
+      error(`插件重载失败: ${result.error}`)
+    }
+  } catch (err: any) {
+    console.error('重载插件失败:', err)
+    error(`重载插件失败: ${err.message || '未知错误'}`)
+  } finally {
+    isReloading.value = false
+  }
+}
+
+// 从详情页面重载插件（重载后刷新 selectedPlugin）
+async function handleReloadPluginFromDetail(plugin: any): Promise<void> {
+  if (isReloading.value) return
+
+  isReloading.value = true
+  try {
+    const result = await window.ztools.internal.reloadPlugin(plugin.path)
+    if (result.success) {
+      await loadPlugins()
+      // 更新 selectedPlugin 引用
+      const updated = plugins.value.find((p) => p.path === plugin.path)
+      if (updated) {
+        selectedPlugin.value = updated
+      }
       success('插件重载成功!')
     } else {
       error(`插件重载失败: ${result.error}`)

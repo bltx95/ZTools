@@ -427,6 +427,73 @@
       stroke-linejoin="round"
     />
 
+    <!-- 停止图标 - Stop (方块) -->
+    <rect
+      v-if="name === 'stop'"
+      x="3"
+      y="3"
+      width="18"
+      height="18"
+      rx="2"
+      ry="2"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- 刷新图标 - Refresh -->
+    <path
+      v-if="name === 'refresh'"
+      d="M23 4V10H17"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      v-if="name === 'refresh'"
+      d="M1 20V14H7"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      v-if="name === 'refresh'"
+      d="M3.51 9A9 9 0 0 1 18.36 5.64L23 10M1 14L5.64 18.36A9 9 0 0 0 20.49 15"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
+    <!-- 打包图标 - Package (云上传) -->
+    <path
+      v-if="name === 'package'"
+      d="M16 16L12 12L8 16"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      v-if="name === 'package'"
+      d="M12 12V21"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <path
+      v-if="name === 'package'"
+      d="M20.39 18.39A5 5 0 0 0 18 9H16.74A8 8 0 1 0 3 16.3"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+
     <!-- 禁止图标 - Ban (圆圈+斜杠) -->
     <circle
       v-if="name === 'ban'"

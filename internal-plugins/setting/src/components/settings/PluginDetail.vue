@@ -2,6 +2,42 @@
   <DetailPanel title="插件详情" @back="emit('back')">
     <template #header-right>
       <template v-if="plugin.installed && !canUpgrade">
+        <button class="icon-btn topbar-action-btn open-btn" title="打开" @click="emit('open')">
+          <Icon name="play" size="16" />
+        </button>
+        <button
+          v-if="isRunning"
+          class="icon-btn topbar-action-btn kill-btn"
+          title="终止运行"
+          @click="emit('kill')"
+        >
+          <Icon name="stop" size="16" />
+        </button>
+        <button
+          class="icon-btn topbar-action-btn folder-btn"
+          title="打开插件目录"
+          @click="emit('open-folder')"
+        >
+          <Icon name="folder" size="16" />
+        </button>
+        <button
+          v-if="plugin.isDevelopment"
+          class="icon-btn topbar-action-btn package-btn"
+          title="打包插件为 ZIP"
+          @click="emit('package')"
+        >
+          <Icon name="package" size="16" />
+        </button>
+        <button
+          class="icon-btn topbar-action-btn reload-btn"
+          title="重新加载 plugin.json 配置文件"
+          @click="emit('reload')"
+        >
+          <Icon name="refresh" size="16" />
+        </button>
+        <button class="icon-btn topbar-action-btn delete-btn" title="卸载" @click="handleUninstall">
+          <Icon name="trash" size="16" />
+        </button>
         <div class="topbar-settings-wrapper">
           <button
             class="icon-btn topbar-action-btn"
@@ -36,12 +72,6 @@
             </div>
           </Transition>
         </div>
-        <button class="icon-btn topbar-action-btn delete-btn" title="卸载" @click="handleUninstall">
-          <Icon name="trash" size="16" />
-        </button>
-        <button class="icon-btn topbar-action-btn" title="打开" @click="emit('open')">
-          <Icon name="play" size="16" />
-        </button>
       </template>
     </template>
     <!-- 插件基本信息 -->
@@ -378,6 +408,7 @@ interface PluginItem {
   logo?: string
   features?: PluginFeature[]
   installed?: boolean
+  isDevelopment?: boolean
   localVersion?: string
   path?: string
   size?: number
@@ -393,6 +424,7 @@ interface DocItem {
 const props = defineProps<{
   plugin: PluginItem
   isLoading?: boolean
+  isRunning?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -401,6 +433,10 @@ const emit = defineEmits<{
   (e: 'download'): void
   (e: 'upgrade'): void
   (e: 'uninstall'): void
+  (e: 'kill'): void
+  (e: 'open-folder'): void
+  (e: 'package'): void
+  (e: 'reload'): void
 }>()
 
 // 插件设置状态
@@ -776,11 +812,54 @@ watch(
 
 .topbar-action-btn:hover:not(:disabled) {
   background: var(--hover-bg);
+}
+
+.topbar-action-btn.open-btn {
   color: var(--primary-color);
 }
 
+.topbar-action-btn.open-btn:hover {
+  background: var(--primary-light-bg);
+}
+
+.topbar-action-btn.kill-btn {
+  color: var(--warning-color);
+}
+
+.topbar-action-btn.kill-btn:hover:not(:disabled) {
+  background: var(--warning-light-bg);
+}
+
+.topbar-action-btn.folder-btn {
+  color: var(--primary-color);
+}
+
+.topbar-action-btn.folder-btn:hover {
+  background: var(--primary-light-bg);
+}
+
+.topbar-action-btn.package-btn {
+  color: var(--purple-color);
+}
+
+.topbar-action-btn.package-btn:hover:not(:disabled) {
+  background: var(--purple-light-bg);
+}
+
+.topbar-action-btn.reload-btn {
+  color: var(--primary-color);
+}
+
+.topbar-action-btn.reload-btn:hover:not(:disabled) {
+  background: var(--primary-light-bg);
+}
+
+.topbar-action-btn.delete-btn {
+  color: var(--danger-color);
+}
+
 .topbar-action-btn.delete-btn:hover:not(:disabled) {
-  color: var(--danger-color, #e74c3c);
+  background: var(--danger-light-bg);
 }
 
 /* 设置按钮容器 */
