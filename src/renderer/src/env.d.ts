@@ -344,6 +344,9 @@ declare global {
       onSuperPanelLaunch: (
         callback: (data: { command: any; clipboardContent?: any }) => void
       ) => void
+      onFloatingBallFiles: (
+        callback: (files: Array<{ path: string; name: string; isDirectory: boolean }>) => void
+      ) => void
     }
   }
 }
