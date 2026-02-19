@@ -246,11 +246,18 @@ async function loadPlugins(): Promise<void> {
   try {
     const result = await window.ztools.internal.getPlugins()
     // 插件中心的插件都是已安装的，标记 installed 为 true
-    plugins.value = result.map((plugin: any) => ({
-      ...plugin,
-      installed: true,
-      localVersion: plugin.version
-    }))
+    plugins.value = result
+      .map((plugin: any) => ({
+        ...plugin,
+        installed: true,
+        localVersion: plugin.version
+      }))
+      .sort((a: any, b: any) => {
+        // 按安装时间降序排序（最新安装的在前面）
+        const timeA = a.installedAt ? new Date(a.installedAt).getTime() : 0
+        const timeB = b.installedAt ? new Date(b.installedAt).getTime() : 0
+        return timeB - timeA
+      })
     // 同时加载运行中的插件
     await loadRunningPlugins()
   } catch (error) {
