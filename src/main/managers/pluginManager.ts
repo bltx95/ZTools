@@ -285,6 +285,8 @@ class PluginManager {
     if (!this.mainWindow) return
 
     try {
+      // 插件加载时，先将窗口高度设置为 1px，避免节流
+      api.resizeWindow(WINDOW_INITIAL_HEIGHT + 1)
       const pluginConfig = this.readPluginConfig(pluginPath)
       const isDevelopment = !!pluginInfoFromDB?.isDevelopment
       const { pluginUrl, isConfigHeadless } = this.resolvePluginUrl(
@@ -311,7 +313,6 @@ class PluginManager {
 
       // 设置初始高度为 1px，避免节流
       this.pluginView.setBounds({ x: 0, y: WINDOW_INITIAL_HEIGHT, width: windowWidth, height: 1 })
-      api.resizeWindow(WINDOW_INITIAL_HEIGHT + 1)
 
       if (!isConfigHeadless) {
         initialViewHeight = this.pluginDefaultHeight
