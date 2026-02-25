@@ -26,6 +26,8 @@ interface DetachedWindowInfo {
   pluginName: string
   pluginLogo?: string
   isAlwaysOnTop: boolean
+  lastFocusTarget: 'titlebar' | 'plugin' // 记录最后一次焦点位置，用于窗口恢复
+  savedFocusTarget: 'titlebar' | 'plugin' // 窗口失焦时快照的焦点状态
 }
 
 /**
@@ -254,14 +256,17 @@ class DetachedWindowManager {
       })
 
       // 保存窗口信息
-      this.detachedWindowMap.set(windowId, {
+      const windowInfo: DetachedWindowInfo = {
         window: win,
         view: pluginView,
         pluginPath,
         pluginName,
         pluginLogo: options.logo,
-        isAlwaysOnTop: false
-      })
+        isAlwaysOnTop: false,
+        lastFocusTarget: options.autoFocusSubInput ? 'titlebar' : 'plugin',
+        savedFocusTarget: options.autoFocusSubInput ? 'titlebar' : 'plugin'
+      }
+      this.detachedWindowMap.set(windowId, windowInfo)
 
       // 监听窗口关闭
       win.on('closed', () => {
@@ -286,8 +291,13 @@ class DetachedWindowManager {
       // 显示窗口
       win.show()
 
-      // 注册开发者工具快捷键
+      // 焦点跟踪：实时记录焦点在标题栏还是插件视图
+      win.webContents.on('focus', () => {
+        windowInfo.lastFocusTarget = 'titlebar'
+      })
+
       pluginView.webContents.on('focus', () => {
+        windowInfo.lastFocusTarget = 'plugin'
         if (!pluginView.webContents.isDestroyed()) {
           devToolsShortcut.register(pluginView.webContents)
         }
@@ -295,6 +305,21 @@ class DetachedWindowManager {
 
       pluginView.webContents.on('blur', () => {
         devToolsShortcut.unregister()
+      })
+
+      // 窗口失焦时快照焦点状态（此时 lastFocusTarget 还是正确的）
+      win.on('blur', () => {
+        windowInfo.savedFocusTarget = windowInfo.lastFocusTarget
+      })
+
+      // 窗口从后台恢复时，用快照状态恢复焦点
+      // （此时 webContents focus 事件已经把 lastFocusTarget 覆盖成 titlebar 了）
+      win.on('focus', () => {
+        if (windowInfo.savedFocusTarget === 'plugin') {
+          if (!pluginView.webContents.isDestroyed()) {
+            pluginView.webContents.focus()
+          }
+        }
       })
 
       // 更新 Dock 图标显示状态
