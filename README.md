@@ -294,7 +294,7 @@ ztools/
 ### 代码拉取
 
 1. 先 fork 仓库
-  - 如果需要贡献代码请 fork ztools-api-types 和 ztools-plugin-cli 仓库
+  - 如果需要贡献代码请 fork [ztools-api-types](https://github.com/ZToolsCenter/ztools-api-types) 和 [ztools-plugin-cli](https://github.com/ZToolsCenter/ztools-plugin-cli) 仓库
 2. 拉取完整代码
 
 ```bash
