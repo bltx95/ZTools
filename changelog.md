@@ -1,33 +1,46 @@
-# 2.2.0
+# 2.2.1
 
 ## 新功能 (Feat)
 
-- 超级面板支持窗口匹配
-- 超级面板存在窗口匹配时图标闪烁提示
-- 本地应用/启动支持固定到超级面板
-- 超级面板头像点击显示主窗口
-- 添加 findInPage 和 stopFindInPage API 支持
-- 添加 found-in-page 接口支持
-- 通用设置添加空格打开指令
-- 快捷键添加快捷设置按钮
+- 支持 HTTP API
+- 超级面板支持分组
+- 快捷键设置显示内置快捷键
+- 增加 cmd + F 内置快捷键说明
+- 搜索结果固定到超级面板
+- 搜索框 item 支持取消固定到超级面板
+- Windows 本地应用支持管理员启动
+- 退出命令
+- 关于命令，方便查看版本号
+- 已安装插件置顶，方便插件开发
+- 插件打包图标改成更直观一点的
+- 插件详情删除确认使用自定义组件
 
 ## 修复 (Fix)
 
-- 修复扩展屏宽度变大问题
-- 修复 net 重定向错误
-- 修复 setExpendHeight API
-- 修复窗口禁止拖入问题
-- 去除禁止跨域限制命令行
+- 修复退出应用未关闭 HTTP 服务
+- 修复 Windows 系统扫描目录出现文件占用问题
+- 修复托盘图标多次初始化问题
+- 修复 redirect 跳转未触发 onPluginOut
+- 修复使用 subInputSelect API 后按回车无效
+- 修复分离窗口无法触发 SubInput onChange
+- 修复分离时触发一次 SubInput onChange
+- 修复重复触发 SubInput onChange
+- 修复窗口匹配 payload 为空
+- 修复 Windows 管理员启动无响应
+- 修复添加开发中插件命令失效
+- 修复已安装插件更多按钮图标没对齐
 
 ## 优化 (Optimize)
 
-- 去除 Tab 提醒 Go 文案
+- 启用退出终止插件时，检查是否有子窗口，存在子窗口则不退出
+- HTTP 服务放到关于上面
 
 ## 重构 (Refactor)
 
-- doStorage 存储值键名改为 value
-- 为 Settings.vue 中插件相关的内部状态变量添加 local 前缀以提高命名清晰度
+- dbGet、dbPut 使用同步
+- redirect 命令使用 title 查找
+- 接口 API 监听事件不支持多次监听
 
 ## 其他 (Chore)
 
-- 下载源切回 GitHub
+- 更新 Windows Native，支持截图窗体识别
