@@ -86,6 +86,26 @@
                   </svg>
                   {{ isImportingNpm ? '安装中...' : '从 npm 安装' }}
                 </button>
+                <button
+                  class="more-menu-item kill-all-item"
+                  :disabled="isKillingAll || runningPluginsCount === 0"
+                  @click="handleKillAllPlugins"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  </svg>
+                  {{ isKillingAll ? '停止中...' : '停止所有插件' }}
+                </button>
               </div>
             </div>
           </div>
@@ -314,6 +334,7 @@ const isImportingDev = ref(false)
 const isImportingNpm = ref(false)
 const isDeleting = ref(false)
 const isKilling = ref(false)
+const isKillingAll = ref(false)
 const isReloading = ref(false)
 const isPackaging = ref(false)
 
@@ -344,9 +365,14 @@ const searchFilteredPlugins = computed(() => {
 // 全部插件数量（经过搜索过滤）
 const allPluginsCount = computed(() => searchFilteredPlugins.value.length)
 
+// 运行中插件列表（经过搜索过滤）
+const runningFilteredPlugins = computed(() => {
+  return searchFilteredPlugins.value.filter((p) => isPluginRunning(p.path))
+})
+
 // 运行中插件数量（经过搜索过滤）
 const runningPluginsCount = computed(() => {
-  return searchFilteredPlugins.value.filter((p) => isPluginRunning(p.path)).length
+  return runningFilteredPlugins.value.length
 })
 
 // 最终显示的插件列表（根据状态过滤，置顶的排在最前）
@@ -571,6 +597,70 @@ async function handleKillPlugin(plugin: any): Promise<void> {
     error(`终止插件失败: ${err.message || '未知错误'}`)
   } finally {
     isKilling.value = false
+  }
+}
+
+// 停止所有插件
+async function handleKillAllPlugins(): Promise<void> {
+  const pluginsToKill = runningFilteredPlugins.value
+  if (isKillingAll.value || pluginsToKill.length === 0) return
+
+  // 确认停止
+  const confirmed = await confirm({
+    title: '停止所有插件',
+    message: `确定要停止所有运行中的插件吗？\n\n共有 ${pluginsToKill.length} 个插件正在运行。`,
+    type: 'warning',
+    confirmText: '停止',
+    cancelText: '取消'
+  })
+  if (!confirmed) return
+
+  isKillingAll.value = true
+  try {
+    // 获取要停止的插件路径列表
+    const pluginPaths = pluginsToKill.map((p) => p.path)
+    let successCount = 0
+    let failCount = 0
+
+    // 逐个停止插件
+    for (const pluginPath of pluginPaths) {
+      try {
+        const result = await window.ztools.internal.killPlugin(pluginPath)
+        if (result.success) {
+          successCount++
+        } else {
+          failCount++
+          console.error(`停止插件失败: ${pluginPath}`, result.error)
+        }
+      } catch (err) {
+        failCount++
+        console.error(`停止插件异常: ${pluginPath}`, err)
+      }
+    }
+
+    // 重新加载运行状态
+    await loadRunningPlugins()
+
+    // 关闭更多菜单
+    showMoreMenu.value = false
+
+    // 显示结果
+    if (failCount === 0) {
+      success(`已停止所有插件（共 ${successCount} 个）`)
+      // 停止成功后返回搜索主界面
+      setTimeout(() => {
+        window.ztools.hideWindow()
+      }, 500)
+    } else if (successCount === 0) {
+      error(`停止失败（共 ${failCount} 个）`)
+    } else {
+      error(`部分停止失败：成功 ${successCount} 个，失败 ${failCount} 个`)
+    }
+  } catch (err: any) {
+    console.error('停止所有插件失败:', err)
+    error(`停止所有插件失败: ${err.message || '未知错误'}`)
+  } finally {
+    isKillingAll.value = false
   }
 }
 
@@ -1217,5 +1307,13 @@ async function handleInstallFromNpm(data: {
 
 .more-menu-item svg {
   flex-shrink: 0;
+}
+
+.more-menu-item.kill-all-item:not(:disabled) {
+  color: var(--warning-color);
+}
+
+.more-menu-item.kill-all-item:hover:not(:disabled) {
+  background: var(--warning-light-bg);
 }
 </style>
