@@ -1,0 +1,15 @@
+#!/bin/sh
+
+set -e
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+
+pnpm run format
+
+if [ -n "$STAGED_FILES" ]; then
+  echo "$STAGED_FILES" | while IFS= read -r file; do
+    [ -f "$file" ] && git add -- "$file"
+  done
+fi
+
+#pnpm run lint

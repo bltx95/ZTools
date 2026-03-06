@@ -37,7 +37,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "sync-api-types": "node scripts/sync-api-types.js",
-    "check-api-types": "node -p \"require('./ztools-api-types/package.json')['utools-version']\""
+    "check-api-types": "node -p \"require('./ztools-api-types/package.json')['utools-version']\"",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "postinstall": "pnpm run hooks:install || true"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
