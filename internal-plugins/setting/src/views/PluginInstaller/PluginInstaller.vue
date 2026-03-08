@@ -36,7 +36,7 @@ async function loadPluginInfo(filePath?: string): Promise<void> {
   }
 
   try {
-    const result = await window.ztools.internal.readPluginInfoFromZip(filePath)
+    const result = await window.ztools.internal.readPluginInfoFromZpx(filePath)
     if (result.success && result.pluginInfo) {
       pluginInfo.value = result.pluginInfo
       installFilePath.value = filePath

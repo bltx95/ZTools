@@ -497,10 +497,10 @@ window.ztools = {
     getAllPlugins: async () => await electron.ipcRenderer.invoke('internal:get-all-plugins'),
     selectPluginFile: async () => await electron.ipcRenderer.invoke('internal:select-plugin-file'),
     importPlugin: async () => await electron.ipcRenderer.invoke('internal:import-plugin'),
-    readPluginInfoFromZip: async (zipPath) =>
-      await electron.ipcRenderer.invoke('internal:read-plugin-info-from-zip', zipPath),
-    installPluginFromPath: async (zipPath) =>
-      await electron.ipcRenderer.invoke('internal:install-plugin-from-path', zipPath),
+    readPluginInfoFromZpx: async (zpxPath) =>
+      await electron.ipcRenderer.invoke('internal:read-plugin-info-from-zpx', zpxPath),
+    installPluginFromPath: async (zpxPath) =>
+      await electron.ipcRenderer.invoke('internal:install-plugin-from-path', zpxPath),
     importDevPlugin: async (pluginPath) =>
       await electron.ipcRenderer.invoke('internal:import-dev-plugin', pluginPath),
     deletePlugin: async (pluginPath) =>

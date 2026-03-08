@@ -54,7 +54,7 @@ declare global {
         getRunningPlugins: () => Promise<string[]>
         selectPluginFile: () => Promise<{ success: boolean; filePath?: string; error?: string }>
         importPlugin: () => Promise<{ success: boolean; error?: string }>
-        readPluginInfoFromZip: (zipPath: string) => Promise<{
+        readPluginInfoFromZpx: (zpxPath: string) => Promise<{
           success: boolean
           pluginInfo?: {
             name: string
@@ -68,7 +68,7 @@ declare global {
           }
           error?: string
         }>
-        installPluginFromPath: (zipPath: string) => Promise<{
+        installPluginFromPath: (zpxPath: string) => Promise<{
           success: boolean
           error?: string
           plugin?: any

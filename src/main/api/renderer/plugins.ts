@@ -1,4 +1,3 @@
-import AdmZip from 'adm-zip'
 import type { PluginManager } from '../../managers/pluginManager'
 import { app, dialog, ipcMain } from 'electron'
 import { promises as fs } from 'fs'
@@ -12,6 +11,7 @@ import windowManager from '../../managers/windowManager'
 import { sleep } from '../../utils/common.js'
 import { downloadFile } from '../../utils/download.js'
 import { httpGet } from '../../utils/httpRequest.js'
+import { packZpx, extractZpx, readTextFromZpx, readFileFromZpx } from '../../utils/zpxArchive.js'
 import { pluginFeatureAPI } from '../plugin/feature'
 import webSearchAPI from './webSearch'
 import databaseAPI from '../shared/database'
@@ -56,11 +56,11 @@ export class PluginsAPI {
     ipcMain.handle('get-plugin-db-data', (_event, pluginName: string) =>
       this.getPluginDbData(pluginName)
     )
-    ipcMain.handle('read-plugin-info-from-zip', (_event, zipPath: string) =>
-      this.readPluginInfoFromZip(zipPath)
+    ipcMain.handle('read-plugin-info-from-zpx', (_event, zpxPath: string) =>
+      this.readPluginInfoFromZpx(zpxPath)
     )
-    ipcMain.handle('install-plugin-from-path', (_event, zipPath: string) =>
-      this.installPluginFromPath(zipPath)
+    ipcMain.handle('install-plugin-from-path', (_event, zpxPath: string) =>
+      this.installPluginFromPath(zpxPath)
     )
     // mainPush 功能：查询插件的动态搜索结果
     ipcMain.handle(
@@ -221,7 +221,7 @@ export class PluginsAPI {
     try {
       const result = await dialog.showOpenDialog(this.mainWindow!, {
         title: '选择插件文件',
-        filters: [{ name: '插件文件', extensions: ['zip', 'tool-plugin'] }],
+        filters: [{ name: '插件文件', extensions: ['zpx'] }],
         properties: ['openFile']
       })
 
@@ -236,12 +236,12 @@ export class PluginsAPI {
     }
   }
 
-  // 导入ZIP插件（保留用于兼容性，直接安装不预览）
+  // 导入 ZPX 插件（保留用于兼容性，直接安装不预览）
   private async importPlugin(): Promise<any> {
     try {
       const result = await dialog.showOpenDialog(this.mainWindow!, {
         title: '选择插件文件',
-        filters: [{ name: '插件文件', extensions: ['zip', 'tool-plugin'] }],
+        filters: [{ name: '插件文件', extensions: ['zpx'] }],
         properties: ['openFile']
       })
 
@@ -249,24 +249,31 @@ export class PluginsAPI {
         return { success: false, error: '未选择文件' }
       }
 
-      const zipPath = result.filePaths[0]
-      return await this._installPluginFromZip(zipPath)
+      const zpxPath = result.filePaths[0]
+      return await this._installPluginFromZpx(zpxPath)
     } catch (error: unknown) {
       console.error('[Plugins] 导入插件失败:', error)
       return { success: false, error: error instanceof Error ? error.message : '未知错误' }
     }
   }
 
-  // 从ZIP安装插件（核心逻辑）
-  private async _installPluginFromZip(zipPath: string): Promise<any> {
+  /**
+   * 从 ZPX 安装插件（核心逻辑）
+   * 流程：读取 .zpx 中的 plugin.json → 校验 → 解压到插件目录 → 保存数据库
+   * @param zpxPath .zpx 文件路径
+   */
+  private async _installPluginFromZpx(zpxPath: string): Promise<any> {
     await fs.mkdir(PLUGIN_DIR, { recursive: true })
 
     try {
-      // 读取 ZIP 文件
-      const zip = new AdmZip(zipPath)
+      // 从 ZPX 中读取 plugin.json（不解压整个包）
+      let pluginJsonContent: string
+      try {
+        pluginJsonContent = await readTextFromZpx(zpxPath, 'plugin.json')
+      } catch {
+        return { success: false, error: 'plugin.json 文件不存在' }
+      }
 
-      // 直接读取 plugin.json（不解压）
-      const pluginJsonContent = zip.readAsText('plugin.json')
       if (!pluginJsonContent) {
         return { success: false, error: 'plugin.json 文件不存在' }
       }
@@ -307,8 +314,8 @@ export class PluginsAPI {
         return { success: false, error: validation.error }
       }
 
-      // 校验通过，解压到目标目录
-      zip.extractAllTo(pluginPath, true)
+      // 校验通过，解压 ZPX 到目标目录
+      await extractZpx(zpxPath, pluginPath)
 
       // 保存到数据库
       const pluginInfo = {
@@ -368,16 +375,17 @@ export class PluginsAPI {
   }
 
   /**
-   * 从 ZIP 文件中读取插件信息（不安装）
+   * 从 ZPX 文件中读取插件信息（不安装）
    * 用于安装前预览插件详情
+   * @param zpxPath .zpx 文件路径
    */
-  public async readPluginInfoFromZip(zipPath: string): Promise<any> {
+  public async readPluginInfoFromZpx(zpxPath: string): Promise<any> {
     try {
-      const zip = new AdmZip(zipPath)
-
-      // 读取 plugin.json
-      const pluginJsonContent = zip.readAsText('plugin.json')
-      if (!pluginJsonContent) {
+      // 从 ZPX 中读取 plugin.json
+      let pluginJsonContent: string
+      try {
+        pluginJsonContent = await readTextFromZpx(zpxPath, 'plugin.json')
+      } catch {
         return { success: false, error: '无效的插件文件：缺少 plugin.json' }
       }
 
@@ -392,18 +400,15 @@ export class PluginsAPI {
         return { success: false, error: '无效的插件文件：缺少 name 字段' }
       }
 
-      // 尝试提取 logo 为 base64
+      // 尝试从 ZPX 中提取 logo 为 base64
       let logoBase64 = ''
       if (pluginConfig.logo) {
         try {
-          const logoEntry = zip.getEntry(pluginConfig.logo)
-          if (logoEntry) {
-            const logoBuffer = logoEntry.getData()
-            const ext = path.extname(pluginConfig.logo).toLowerCase().replace('.', '')
-            const mimeType =
-              ext === 'svg' ? 'image/svg+xml' : ext === 'png' ? 'image/png' : `image/${ext}`
-            logoBase64 = `data:${mimeType};base64,${logoBuffer.toString('base64')}`
-          }
+          const logoBuffer = await readFileFromZpx(zpxPath, pluginConfig.logo)
+          const ext = path.extname(pluginConfig.logo).toLowerCase().replace('.', '')
+          const mimeType =
+            ext === 'svg' ? 'image/svg+xml' : ext === 'png' ? 'image/png' : `image/${ext}`
+          logoBase64 = `data:${mimeType};base64,${logoBuffer.toString('base64')}`
         } catch (error) {
           console.warn('[Plugins] 提取插件 logo 失败:', error)
         }
@@ -433,14 +438,16 @@ export class PluginsAPI {
   }
 
   /**
-   * 从指定文件路径安装插件（.tool-plugin / .zip），支持覆盖已存在的插件
+   * 从指定文件路径安装插件（.zpx），支持覆盖已存在的插件
+   * @param zpxPath .zpx 文件路径
    */
-  public async installPluginFromPath(zipPath: string): Promise<any> {
+  public async installPluginFromPath(zpxPath: string): Promise<any> {
     try {
-      // 先读取 ZIP 中的 plugin.json 获取插件名称
-      const zip = new AdmZip(zipPath)
-      const pluginJsonContent = zip.readAsText('plugin.json')
-      if (!pluginJsonContent) {
+      // 从 ZPX 中读取 plugin.json 获取插件名称
+      let pluginJsonContent: string
+      try {
+        pluginJsonContent = await readTextFromZpx(zpxPath, 'plugin.json')
+      } catch {
         return { success: false, error: 'plugin.json 文件不存在' }
       }
 
@@ -486,7 +493,7 @@ export class PluginsAPI {
       }
 
       // 执行安装
-      return await this._installPluginFromZip(zipPath)
+      return await this._installPluginFromZpx(zpxPath)
     } catch (error: unknown) {
       console.error('[Plugins] 覆盖安装插件失败:', error)
       return { success: false, error: error instanceof Error ? error.message : '安装失败' }
@@ -812,7 +819,10 @@ export class PluginsAPI {
     }
   }
 
-  // 从市场安装插件
+  /**
+   * 从市场安装插件
+   * 流程：下载 .zpx 文件 → _installPluginFromZpx() → 清理临时文件
+   */
   private async installPluginFromMarket(plugin: any): Promise<any> {
     try {
       console.log('[Plugins] 开始从市场安装插件:', plugin.name)
@@ -825,7 +835,8 @@ export class PluginsAPI {
 
       const tempDir = path.join(app.getPath('temp'), 'ztools-plugin-download')
       await fs.mkdir(tempDir, { recursive: true })
-      const tempFilePath = path.join(tempDir, `${plugin.name}-${Date.now()}.zip`)
+      // 下载为 .zpx 后缀
+      const tempFilePath = path.join(tempDir, `${plugin.name}-${Date.now()}.zpx`)
 
       let retryCount = 0
       const maxRetries = 3
@@ -842,7 +853,8 @@ export class PluginsAPI {
       }
 
       console.log('[Plugins] 插件下载完成:', tempFilePath)
-      const result = await this._installPluginFromZip(tempFilePath)
+      // 使用 ZPX 安装
+      const result = await this._installPluginFromZpx(tempFilePath)
 
       try {
         await fs.unlink(tempFilePath)
@@ -858,7 +870,11 @@ export class PluginsAPI {
     }
   }
 
-  // 打包开发中插件为 ZIP
+  /**
+   * 打包开发中插件为 ZPX 文件
+   * 流程：插件目录 → packZpx() → .zpx 文件
+   * @param pluginPath 插件目录路径
+   */
   public async packagePlugin(pluginPath: string): Promise<{ success: boolean; error?: string }> {
     try {
       // 查找插件信息
@@ -883,24 +899,22 @@ export class PluginsAPI {
         return { success: false, error: '插件目录不存在' }
       }
 
-      // 默认文件名
-      const defaultName = `${pluginInfo.name}-v${pluginInfo.version}.tool-plugin`
+      // 默认文件名使用 .zpx 扩展名
+      const defaultName = `${pluginInfo.name}-v${pluginInfo.version}.zpx`
 
       // 弹出保存对话框
       const result = await dialog.showSaveDialog(this.mainWindow!, {
         title: '保存插件包',
         defaultPath: defaultName,
-        filters: [{ name: '插件包', extensions: ['tool-plugin'] }]
+        filters: [{ name: '插件包', extensions: ['zpx'] }]
       })
 
       if (result.canceled || !result.filePath) {
         return { success: false, error: '已取消' }
       }
 
-      // 创建 ZIP 文件
-      const zip = new AdmZip()
-      zip.addLocalFolder(pluginPath)
-      zip.writeZip(result.filePath)
+      // 使用 zpxArchive 打包
+      await packZpx(pluginPath, result.filePath)
 
       console.log('[Plugins] 插件打包成功:', result.filePath)
       return { success: true }
