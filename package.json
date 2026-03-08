@@ -44,6 +44,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@electron/asar": "^4.1.0",
     "adm-zip": "^0.5.16",
     "chokidar": "^4.0.3",
     "electron-log": "^5.4.3",
@@ -53,6 +54,7 @@
     "openai": "^6.25.0",
     "pinia": "^3.0.4",
     "pinyin-pro": "^3.24.2",
+    "sharp": "^0.34.5",
     "simple-plist": "^1.3.1",
     "tar": "^7.5.9",
     "uiohook-napi": "^1.5.4",
@@ -78,6 +80,7 @@
     "electron-vite": "^4.0.1",
     "eslint": "^9.36.0",
     "eslint-plugin-vue": "^10.4.0",
+    "fs-extra": "^11.3.4",
     "node-gyp": "^12.1.0",
     "prettier": "^3.6.2",
     "typescript": "^5.9.2",
@@ -94,6 +97,7 @@
       "esbuild",
       "lmdb",
       "msgpackr-extract",
+      "sharp",
       "uiohook-napi"
     ]
   }

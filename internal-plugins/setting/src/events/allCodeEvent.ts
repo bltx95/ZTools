@@ -70,3 +70,10 @@ addZtoolsCodeEventListener('function.install-plugin', (e) => {
     jumpFunctionPluginInstaller({ installFilePath: installFilePaths[0] })
   }
 })
+
+/**
+ * 退出 ZTools 应用
+ */
+addZtoolsCodeEventListener('function.exit', () => {
+  void window.ztools.internal.quitApp()
+})

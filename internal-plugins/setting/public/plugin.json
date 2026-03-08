@@ -71,7 +71,7 @@
           "type": "files",
           "label": "安装插件",
           "fileType": "file",
-          "match": "/\\.tool-plugin$/i",
+          "match": "/\\.zpx$/i",
           "maxLength": 1
         }
       ]

@@ -54,6 +54,20 @@ function replayPendingPluginEnterIfNeeded() {
 // 获取操作系统类型
 const osType = electron.ipcRenderer.sendSync('get-os-type')
 
+// Sharp 图像处理库（懒加载，仅在首次调用时加载）
+let _sharp = null
+function getSharp() {
+  if (!_sharp) {
+    try {
+      _sharp = require('sharp')
+    } catch (err) {
+      console.error('[ZTools] Sharp 加载失败:', err.message)
+      throw new Error('Sharp 图像处理库加载失败，请确保已正确安装')
+    }
+  }
+  return _sharp
+}
+
 window.ztools = {
   getAppName: () => 'ZTools',
   // 获取拖放文件的路径（Electron webUtils）
@@ -503,10 +517,10 @@ window.ztools = {
     getAllPlugins: async () => await electron.ipcRenderer.invoke('internal:get-all-plugins'),
     selectPluginFile: async () => await electron.ipcRenderer.invoke('internal:select-plugin-file'),
     importPlugin: async () => await electron.ipcRenderer.invoke('internal:import-plugin'),
-    readPluginInfoFromZip: async (zipPath) =>
-      await electron.ipcRenderer.invoke('internal:read-plugin-info-from-zip', zipPath),
-    installPluginFromPath: async (zipPath) =>
-      await electron.ipcRenderer.invoke('internal:install-plugin-from-path', zipPath),
+    readPluginInfoFromZpx: async (zpxPath) =>
+      await electron.ipcRenderer.invoke('internal:read-plugin-info-from-zpx', zpxPath),
+    installPluginFromPath: async (zpxPath) =>
+      await electron.ipcRenderer.invoke('internal:install-plugin-from-path', zpxPath),
     importDevPlugin: async (pluginPath) =>
       await electron.ipcRenderer.invoke('internal:import-dev-plugin', pluginPath),
     deletePlugin: async (pluginPath) =>
@@ -743,7 +757,10 @@ window.ztools = {
     offLogEntries: (callback) => {
       if (logEntriesCallback === callback) logEntriesCallback = null
     }
-  }
+  },
+
+  // Sharp 图像处理
+  sharp: (input, options) => getSharp()(input, options)
 }
 
 electron.ipcRenderer.on('on-plugin-enter', (event, launchParam) => {

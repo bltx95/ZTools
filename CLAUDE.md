@@ -139,7 +139,7 @@ Renderer Process (src/renderer/)
 - 插件通过 `resources/preload.js` 访问受限的主进程 API
   - 使用 `session.registerPreloadScript()` 注入到所有插件
 - 支持两种部署模式：
-  - **生产插件**：打包的 ZIP 文件 → 解压到 `userData/plugins/`
+  - **生产插件**：打包的 ZPX 文件（gzip 压缩的 asar 归档）→ 解压到 `userData/plugins/`
   - **开发插件**：本地文件夹，支持 HTTP URL（如 `http://localhost:5173`）
 - 数据隔离：每个插件的数据库操作自动添加 `PLUGIN/{pluginName}/` 前缀（通过 `getPluginPrefix()` 方法识别调用来源）
 
@@ -432,7 +432,7 @@ interface DbDoc {
 
 - `get-commands` - 扫描系统指令（`commandScanner`）
 - `launch` - 启动应用或插件
-- `import-plugin` - 导入 ZIP 插件
+- `import-plugin` - 导入 ZPX 插件
 - `import-dev-plugin` - 添加开发插件
 - `delete-plugin` - 删除插件 + 清理历史和固定列表
 - `get-plugins` - 获取插件列表
@@ -453,6 +453,10 @@ interface DbDoc {
 - `plugin-redirect:*` - 搜索重定向功能
 - `plugin-screen:*` - 屏幕功能（截图等）
 - `plugin-internal:*` - 内置插件专用 API（更高权限）
+
+**图像处理 API**（直接在 preload 中通过 `require('sharp')` 提供，无需 IPC）：
+
+- `ztools.sharp([input], [options])` - 获取 Sharp 实例，支持所有链式方法（resize/rotate/toBuffer/toFile 等）
 
 **事件推送**（Main → Renderer）：
 
@@ -875,7 +879,7 @@ asarUnpack:
 
 ### 插件市场系统
 
-**概述**：ZTools 提供内置的插件市场，用户可以在线浏览、安装、升级插件，无需手动下载和解压 ZIP 文件。
+**概述**：ZTools 提供内置的插件市场，用户可以在线浏览、安装、升级插件，无需手动下载和解压 ZPX 文件。
 
 **技术架构**：
 
@@ -914,12 +918,11 @@ installPluginFromMarket() - 下载并安装插件
      // 1. 获取蓝奏云真实下载链接
      const realDownloadUrl = await getLanzouDownloadLink(plugin.downloadUrl)
 
-     // 2. 下载 ZIP 文件到临时目录
-     await downloadFile(realDownloadUrl, tempZipPath)
+     // 2. 下载 ZPX 文件到临时目录
+     await downloadFile(realDownloadUrl, tempZpxPath)
 
-     // 3. 解压到 userData/plugins/{pluginName}/
-     const zip = new AdmZip(tempZipPath)
-     zip.extractAllTo(targetDir, true)
+     // 3. 使用 zpxArchive 解压到 userData/plugins/{pluginName}/
+     await extractZpx(tempZpxPath, targetDir)
 
      // 4. 验证 plugin.json 是否存在
      // 5. 加载插件并通知渲染进程
@@ -951,6 +954,13 @@ installPluginFromMarket() - 下载并安装插件
 
 **工具函数**（`src/main/utils/`）：
 
+- `zpxArchive.ts` - ZPX 归档工具（@electron/asar + gzip）
+  - `packZpx()` - 将目录打包为 ZPX 文件
+  - `extractZpx()` - 解压 ZPX 文件到目录
+  - `readFileFromZpx()` - 从 ZPX 中读取单个文件（Buffer）
+  - `readTextFromZpx()` - 从 ZPX 中读取文本文件
+  - `existsInZpx()` - 检查文件是否存在于 ZPX 中
+  - `isValidZpx()` - 验证文件是否为有效的 ZPX 格式
 - `lanzou.ts` - 蓝奏云 API 封装
   - `getLanzouFolderFileList()` - 获取文件夹列表
   - `getLanzouDownloadLink()` - 解析真实下载链接
@@ -1157,6 +1167,9 @@ updater 重启应用
   - 插件状态管理（未安装/已安装/可升级）
   - 插件升级流程（`handleUpgradePlugin()`）
 - `src/renderer/src/components/PluginDetail.vue` - 插件详情弹窗
+- `src/main/utils/zpxArchive.ts` - ZPX 归档工具（asar + gzip）
+  - `packZpx()` / `extractZpx()` - 打包/解压 ZPX
+  - `readFileFromZpx()` / `readTextFromZpx()` - 读取 ZPX 内文件
 - `src/main/utils/lanzou.ts` - 蓝奏云 API 工具
   - `getLanzouFolderFileList()` - 获取蓝奏云文件夹列表
   - `getLanzouDownloadLink()` - 解析真实下载链接
@@ -1807,3 +1820,11 @@ window.exports = {
 - **统一架构**：UI 插件和无界面插件使用相同的容器机制
 - **资源管理**：更好的生命周期控制和内存管理
 - **官方推荐**：Electron 38+ 推荐使用 WebContentsView 替代 BrowserView
+
+### 为什么使用 ZPX 格式替代 ZIP？
+
+- **完整性**：asar 归档保留完整的目录结构和元数据，比 ZIP 更可靠
+- **兼容性**：asar 是 Electron 原生支持的归档格式，与 Electron 生态一致
+- **性能**：gzip 流式压缩/解压，内存占用更低，适合大型插件
+- **安全性**：避免 ZIP 路径穿越等安全漏洞，asar 格式天然安全
+- **格式**：`.zpx = gzip(asar archive)`，Magic bytes: `0x1f 0x8b`

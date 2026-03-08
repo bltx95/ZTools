@@ -17,6 +17,8 @@ files:
   - '!internal-plugins/**'
 asarUnpack:
   - resources/**
+  - '**/node_modules/sharp/**/*'
+  - '**/node_modules/@img/**/*'
 win:
   executableName: ZTools
   artifactName: ${name}-${version}-${os}-${arch}.${ext}

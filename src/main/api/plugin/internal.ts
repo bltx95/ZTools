@@ -135,18 +135,18 @@ export class InternalPluginAPI {
       return await (pluginsAPI as any).importPlugin()
     })
 
-    ipcMain.handle('internal:read-plugin-info-from-zip', async (event, zipPath: string) => {
+    ipcMain.handle('internal:read-plugin-info-from-zpx', async (event, zpxPath: string) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {
-        throw new PermissionDeniedError('internal:read-plugin-info-from-zip')
+        throw new PermissionDeniedError('internal:read-plugin-info-from-zpx')
       }
-      return await (pluginsAPI as any).readPluginInfoFromZip(zipPath)
+      return await (pluginsAPI as any).readPluginInfoFromZpx(zpxPath)
     })
 
-    ipcMain.handle('internal:install-plugin-from-path', async (event, zipPath: string) => {
+    ipcMain.handle('internal:install-plugin-from-path', async (event, zpxPath: string) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {
         throw new PermissionDeniedError('internal:install-plugin-from-path')
       }
-      return await (pluginsAPI as any).installPluginFromPath(zipPath)
+      return await (pluginsAPI as any).installPluginFromPath(zpxPath)
     })
 
     ipcMain.handle('internal:import-dev-plugin', async (event, pluginJsonPath?: string) => {

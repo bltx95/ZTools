@@ -597,7 +597,7 @@ watch(
     <template #header-right>
       <template v-if="plugin.installed && !canUpgrade">
         <button class="icon-btn topbar-action-btn open-btn" title="打开" @click="emit('open')">
-          <Icon name="play" size="16" />
+          <div class="i-z-play font-size-16px" />
         </button>
         <button
           v-if="isRunning"
@@ -605,32 +605,32 @@ watch(
           title="终止运行"
           @click="emit('kill')"
         >
-          <Icon name="stop" size="16" />
+          <div class="i-z-stop font-size-16px" />
         </button>
         <button
           class="icon-btn topbar-action-btn folder-btn"
           title="打开插件目录"
           @click="emit('open-folder')"
         >
-          <Icon name="folder" size="16" />
+          <div class="i-z-folder font-size-16px" />
         </button>
         <button
           v-if="plugin.isDevelopment"
           class="icon-btn topbar-action-btn package-btn"
-          title="打包插件为 ZIP"
+          title="打包插件为 zpx"
           @click="emit('package')"
         >
-          <Icon name="package" size="16" />
+          <div class="i-z-package font-size-16px" />
         </button>
         <button
           class="icon-btn topbar-action-btn reload-btn"
           title="重新加载 plugin.json 配置文件"
           @click="emit('reload')"
         >
-          <Icon name="refresh" size="16" />
+          <div class="i-z-refresh font-size-16px" />
         </button>
         <button class="icon-btn topbar-action-btn delete-btn" title="卸载" @click="handleUninstall">
-          <Icon name="trash" size="16" />
+          <div class="i-z-trash font-size-16px" />
         </button>
         <div class="topbar-settings-wrapper">
           <button
@@ -639,7 +639,7 @@ watch(
             title="插件设置"
             @click.stop="toggleSettingsDropdown"
           >
-            <Icon name="settings" size="16" />
+            <div class="i-z-settings font-size-16px" />
           </button>
           <Transition name="dropdown">
             <div v-if="showSettingsDropdown" class="settings-dropdown" @click.stop>
