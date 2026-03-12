@@ -61,6 +61,17 @@ export class PluginShellAPI {
         event.returnValue = null
       }
     })
+
+    // 将文件移动到回收站（异步）
+    ipcMain.handle('shell-trash-item', async (_event, fullPath: string) => {
+      try {
+        await shell.trashItem(fullPath)
+        return { success: true }
+      } catch (error: unknown) {
+        console.error('[PluginShell] 移动文件到回收站失败:', fullPath, error)
+        throw new Error(error instanceof Error ? error.message : '移动文件到回收站失败')
+      }
+    })
   }
 }
 
