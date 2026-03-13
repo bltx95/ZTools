@@ -45,6 +45,8 @@ interface NativeAddon {
   resolveMuiStrings: (refs: string[]) => { [ref: string]: string }
   startColorPicker: (callback: (result: { success: boolean; hex: string | null }) => void) => void
   stopColorPicker: () => void
+  /** 通过 Unicode 输入法模拟键入单个字符/字素簇 */
+  unicodeType: (segment: string) => boolean
 }
 
 interface WindowInfo {
@@ -164,11 +166,8 @@ export class ClipboardMonitor {
       throw new Error('files array cannot be empty')
     }
 
-    if (platform === 'win32') {
+    if (platform === 'win32' || platform === 'darwin') {
       return (addon as NativeAddon).setClipboardFiles(files)
-    } else if (platform === 'darwin') {
-      // macOS 暂不支持
-      throw new Error('setClipboardFiles is not yet supported on macOS')
     }
     return false
   }
@@ -305,6 +304,15 @@ export class WindowManager {
       throw new TypeError('key must be a non-empty string')
     }
     return (addon as NativeAddon).simulateKeyboardTap(key, ...modifiers)
+  }
+
+  /**
+   * 模拟 Unicode 字符输入（逐字符输入，类似输入法）
+   * @param {string} segment - 要输入的字符/字素簇
+   * @returns {boolean} 是否成功
+   */
+  static unicodeType(segment: string): boolean {
+    return (addon as NativeAddon).unicodeType(segment)
   }
 
   /**

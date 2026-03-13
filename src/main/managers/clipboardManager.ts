@@ -77,6 +77,9 @@ class ClipboardManager {
     timestamp: number
   } | null = null
 
+  // 临时取消剪贴板监听的计时器（防止 paste API 写入剪贴板时自我触发）
+  private cancelWatchTimeout: ReturnType<typeof setTimeout> | null = null
+
   constructor() {
     this.IMAGE_DIR = path.join(app.getPath('userData'), 'clipboard', 'images')
     this.clipboardMonitor = new ClipboardMonitor()
@@ -90,6 +93,7 @@ class ClipboardManager {
 
     // 启动剪贴板监听器（原生事件已做去重）
     this.clipboardMonitor.start(() => {
+      if (this.cancelWatchTimeout) return
       console.log('[Clipboard] 剪贴板变化事件触发')
       this.handleClipboardChange()
     })
@@ -153,6 +157,18 @@ class ClipboardManager {
       console.error('[Clipboard] 激活应用失败:', error)
       return false
     }
+  }
+
+  /**
+   * 暂停剪贴板监听 300ms，防止 paste API 写入剪贴板时自我触发
+   */
+  public temporaryCancelWatch(): void {
+    if (this.cancelWatchTimeout) {
+      clearTimeout(this.cancelWatchTimeout)
+    }
+    this.cancelWatchTimeout = setTimeout(() => {
+      this.cancelWatchTimeout = null
+    }, 300)
   }
 
   // 更新配置
