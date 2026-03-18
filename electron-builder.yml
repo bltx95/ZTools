@@ -49,14 +49,8 @@ mac:
   notarize: false
   identity: null # 不签名
   target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
-    - target: zip
-      arch:
-        - x64
-        - arm64
+    - dmg
+    - zip
   artifactName: ${name}-${version}-${os}-${arch}.${ext}
 dmg:
   artifactName: ${name}-${version}-${os}-${arch}.${ext}
