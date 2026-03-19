@@ -417,6 +417,55 @@ declare global {
           running?: boolean
           error?: string
         }>
+        // MCP 服务配置与状态管理
+        mcpServerGetConfig: () => Promise<{
+          success: boolean
+          config?: {
+            enabled: boolean
+            port: number
+            apiKey: string
+          }
+          error?: string
+        }>
+        mcpServerSaveConfig: (config: {
+          enabled: boolean
+          port: number
+          apiKey: string
+        }) => Promise<{
+          success: boolean
+          config?: {
+            enabled: boolean
+            port: number
+            apiKey: string
+          }
+          error?: string
+        }>
+        mcpServerRegenerateKey: () => Promise<{
+          success: boolean
+          apiKey?: string
+          error?: string
+        }>
+        mcpServerStatus: () => Promise<{
+          success: boolean
+          running?: boolean
+          error?: string
+        }>
+        // 当前已安装插件中声明的 MCP 工具列表
+        mcpServerTools: () => Promise<{
+          success: boolean
+          data?: Array<{
+            pluginName: string
+            pluginPath: string
+            pluginLogo?: string
+            toolName: string
+            mcpName: string
+            description: string
+            inputSchema: Record<string, unknown>
+            outputSchema?: Record<string, unknown>
+            enabled: boolean
+          }>
+          error?: string
+        }>
 
         // 调试日志
         logEnable: () => Promise<{ success: boolean }>

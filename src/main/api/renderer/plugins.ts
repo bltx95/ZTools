@@ -192,22 +192,60 @@ export class PluginsAPI {
     }
 
     // 校验必填字段
-    const requiredFields = ['name', 'version', 'features']
+    const requiredFields = ['name', 'version']
     for (const field of requiredFields) {
       if (!pluginConfig[field]) {
         return { valid: false, error: `缺少必填字段: ${field}` }
       }
     }
 
-    // 校验 features 数组
-    if (!Array.isArray(pluginConfig.features) || pluginConfig.features.length === 0) {
-      return { valid: false, error: 'features 必须是非空数组' }
+    const hasFeatures = Array.isArray(pluginConfig.features) && pluginConfig.features.length > 0
+    const hasTools =
+      pluginConfig.tools &&
+      typeof pluginConfig.tools === 'object' &&
+      !Array.isArray(pluginConfig.tools) &&
+      Object.keys(pluginConfig.tools).length > 0
+
+    if (!hasFeatures && !hasTools) {
+      return { valid: false, error: 'features 和 tools 不能同时为空' }
     }
 
-    // 校验每个 feature 的字段
-    for (const feature of pluginConfig.features) {
-      if (!feature.code || !Array.isArray(feature.cmds)) {
-        return { valid: false, error: 'feature 缺少必填字段 (code, cmds)' }
+    if (hasFeatures) {
+      // 校验每个 feature 的字段
+      for (const feature of pluginConfig.features) {
+        if (!feature.code || !Array.isArray(feature.cmds)) {
+          return { valid: false, error: 'feature 缺少必填字段 (code, cmds)' }
+        }
+      }
+    }
+
+    if (hasTools) {
+      for (const [toolName, tool] of Object.entries(pluginConfig.tools)) {
+        if (!/^[a-z][a-z0-9_]*$/.test(toolName)) {
+          return { valid: false, error: `tools.${toolName} 必须使用小写 snake_case 命名` }
+        }
+        if (!tool || typeof tool !== 'object') {
+          return { valid: false, error: `tools.${toolName} 配置无效` }
+        }
+        if (typeof (tool as any).description !== 'string' || !(tool as any).description.trim()) {
+          return { valid: false, error: `tools.${toolName}.description 必须是非空字符串` }
+        }
+        if (
+          !(tool as any).inputSchema ||
+          typeof (tool as any).inputSchema !== 'object' ||
+          Array.isArray((tool as any).inputSchema)
+        ) {
+          return { valid: false, error: `tools.${toolName}.inputSchema 必须是对象` }
+        }
+      }
+    }
+
+    if (!pluginConfig.main && hasTools) {
+      if (!pluginConfig.preload) {
+        return { valid: false, error: '声明 tools 的插件必须提供 preload' }
+      }
+      if (!pluginConfig.logo) {
+        return { valid: false, error: '声明 tools 的插件必须提供 logo' }
       }
     }
 

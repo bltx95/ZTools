@@ -67,6 +67,8 @@ let hotkeyRecordedCallback = null
 let windowMaterialChangeCallback = null
 let logEntriesCallback = null
 let foundInPageCallback = null
+// 插件侧注册的 MCP 工具处理器，实际执行时由主进程回调到这里。
+const registeredTools = new Map()
 
 /**
  * 统一派发插件进入事件（已注册回调时调用）
@@ -544,6 +546,34 @@ window.ztools = {
     clearHeaders: () => electron.ipcRenderer.sendSync('http-clear-headers')
   },
 
+  // 注册插件工具处理器；主进程会校验该工具已在 plugin.json 中声明。
+  registerTool: (name, handler) => {
+    const toolName = typeof name === 'string' ? name.trim() : ''
+    if (!toolName) {
+      throw new Error('工具名称不能为空')
+    }
+    if (typeof handler !== 'function') {
+      throw new Error(`工具 "${toolName}" 的处理器必须是函数`)
+    }
+
+    registeredTools.set(toolName, handler)
+    const result = electron.ipcRenderer.sendSync('plugin:tool-register', toolName)
+    if (!result?.success) {
+      registeredTools.delete(toolName)
+      throw new Error(result?.error || `工具 "${toolName}" 注册失败`)
+    }
+  },
+
+  // 由主进程回调执行已注册的工具处理器，不对插件开发者直接暴露。
+  __invokeRegisteredTool: async (name, input) => {
+    const toolName = typeof name === 'string' ? name.trim() : ''
+    const handler = registeredTools.get(toolName)
+    if (!handler) {
+      throw new Error(`工具 "${toolName}" 未注册`)
+    }
+    return await handler(input ?? {})
+  },
+
   // AI 调用 API
   ai: (option, streamCallback) => {
     const requestId = Math.random().toString(36).substr(2, 9)
@@ -882,6 +912,14 @@ window.ztools = {
     httpServerRegenerateKey: async () =>
       await electron.ipcRenderer.invoke('internal:http-server-regenerate-key'),
     httpServerStatus: async () => await electron.ipcRenderer.invoke('internal:http-server-status'),
+    mcpServerGetConfig: async () =>
+      await electron.ipcRenderer.invoke('internal:mcp-server-get-config'),
+    mcpServerSaveConfig: async (config) =>
+      await electron.ipcRenderer.invoke('internal:mcp-server-save-config', config),
+    mcpServerRegenerateKey: async () =>
+      await electron.ipcRenderer.invoke('internal:mcp-server-regenerate-key'),
+    mcpServerStatus: async () => await electron.ipcRenderer.invoke('internal:mcp-server-status'),
+    mcpServerTools: async () => await electron.ipcRenderer.invoke('internal:mcp-server-tools'),
 
     // ==================== 调试日志 API ====================
     logEnable: async () => await electron.ipcRenderer.invoke('internal:log-enable'),

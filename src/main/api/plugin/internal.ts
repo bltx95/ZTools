@@ -6,6 +6,7 @@ import clipboardManager from '../../managers/clipboardManager.js'
 import detachedWindowManager from '../../core/detachedWindowManager.js'
 import floatingBallManager from '../../core/floatingBallManager.js'
 import httpServer from '../../core/httpServer.js'
+import mcpServer from '../../core/mcpServer.js'
 import superPanelManager from '../../core/superPanelManager.js'
 import aiModelsAPI from '../renderer/aiModels.js'
 import commandsAPI from '../renderer/commands.js'
@@ -14,6 +15,7 @@ import settingsAPI from '../renderer/settings.js'
 import systemAPI from '../renderer/system.js'
 import webSearchAPI from '../renderer/webSearch.js'
 import windowAPI from '../renderer/window.js'
+import pluginToolsAPI from './tools'
 import databaseAPI from '../shared/database'
 import updaterAPI from '../updater.js'
 
@@ -900,6 +902,88 @@ export class InternalPluginAPI {
         throw new PermissionDeniedError('internal:http-server-status')
       }
       return { success: true, running: httpServer.isRunning() }
+    })
+
+    // ==================== MCP 服务 API ====================
+    ipcMain.handle('internal:mcp-server-get-config', async (event) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:mcp-server-get-config')
+      }
+      try {
+        // 读取当前 MCP 服务配置；缺失 API Key 时会在 getConfig 内补齐。
+        const config = mcpServer.getConfig()
+        return { success: true, config }
+      } catch (error: unknown) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '获取配置失败'
+        }
+      }
+    })
+
+    ipcMain.handle(
+      'internal:mcp-server-save-config',
+      async (event, config: { enabled: boolean; port: number; apiKey: string }) => {
+        if (!requireInternalPlugin(this.pluginManager, event)) {
+          throw new PermissionDeniedError('internal:mcp-server-save-config')
+        }
+        try {
+          const wasRunning = mcpServer.isRunning()
+          const savedConfig = await mcpServer.saveConfig(config)
+
+          // 配置变更后按运行状态决定启动、停止或重启服务。
+          if (savedConfig.enabled && !wasRunning) {
+            mcpServer.start()
+          } else if (!savedConfig.enabled && wasRunning) {
+            mcpServer.stop()
+          } else if (savedConfig.enabled && wasRunning) {
+            mcpServer.stop()
+            mcpServer.start()
+          }
+
+          return { success: true, config: savedConfig }
+        } catch (error: unknown) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : '保存配置失败'
+          }
+        }
+      }
+    )
+
+    ipcMain.handle('internal:mcp-server-regenerate-key', async (event) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:mcp-server-regenerate-key')
+      }
+      try {
+        // 仅更新密钥，不直接改动启停状态，由现有服务继续使用新配置。
+        const newKey = mcpServer.generateApiKey()
+        await mcpServer.saveConfig({ apiKey: newKey })
+        return { success: true, apiKey: newKey }
+      } catch (error: unknown) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '重新生成密钥失败'
+        }
+      }
+    })
+
+    ipcMain.handle('internal:mcp-server-status', async (event) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:mcp-server-status')
+      }
+      return { success: true, running: mcpServer.isRunning() }
+    })
+
+    ipcMain.handle('internal:mcp-server-tools', async (event) => {
+      if (!requireInternalPlugin(this.pluginManager, event)) {
+        throw new PermissionDeniedError('internal:mcp-server-tools')
+      }
+      return {
+        success: true,
+        // 返回所有已安装插件声明的工具，供设置页展示与调试。
+        data: pluginToolsAPI.getAllDeclaredToolEntries()
+      }
     })
   }
 }

@@ -7,6 +7,7 @@ import appWatcher from './appWatcher'
 import detachedWindowManager from './core/detachedWindowManager'
 import floatingBallManager from './core/floatingBallManager'
 import httpServer from './core/httpServer'
+import mcpServer from './core/mcpServer'
 import { registerIconProtocolForSession, registerIconScheme } from './core/iconProtocol'
 import { loadInternalPlugins } from './core/internalPluginLoader'
 import { startInternalPluginServer } from './core/internalPluginServer'
@@ -179,6 +180,7 @@ app.on('will-quit', () => {
   floatingBallManager.cleanup()
   // 关闭 HTTP 服务器
   httpServer.stop()
+  mcpServer.stop()
 })
 
 app.on('before-quit', (event) => {

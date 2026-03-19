@@ -80,6 +80,17 @@ const homeRoutes: MenuRouterItemType[] = [
     }
   },
   {
+    path: '/mcpService',
+    name: 'McpService',
+    component: () => import('@/views/McpServiceSetting/McpServiceSetting.vue'),
+    meta: {
+      menu: {
+        label: 'MCP 服务',
+        icon: 'i-z-mcp'
+      }
+    }
+  },
+  {
     path: '/webSearch',
     name: 'WebSearch',
     component: () => import('@/views/WebSearchSetting/WebSearchSetting.vue'),

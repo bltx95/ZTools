@@ -1723,6 +1723,20 @@ export class PluginManager {
   }
 
   /**
+   * 根据插件路径获取运行中的 WebContents。
+   * 同时覆盖主窗口中的插件视图和分离窗口中的插件实例。
+   */
+  public getPluginWebContentsByPath(pluginPath: string): WebContents | null {
+    const plugin = this.pluginViews.find((v) => v.path === pluginPath)
+    if (plugin) return plugin.view.webContents
+
+    const detachedWindow = detachedWindowManager
+      .getAllWindows()
+      .find((windowInfo) => windowInfo.pluginPath === pluginPath)
+    return detachedWindow?.view.webContents ?? null
+  }
+
+  /**
    * 检查调用者是否为内置插件
    * @param event IPC 事件对象
    * @returns 是否为内置插件调用

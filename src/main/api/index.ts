@@ -36,6 +36,7 @@ import pluginRedirectAPI from './plugin/redirect'
 import pluginScreenAPI from './plugin/screen'
 import pluginShellAPI from './plugin/shell'
 import pluginToastAPI from './plugin/toast'
+import pluginToolsAPI from './plugin/tools'
 import pluginUIAPI from './plugin/ui'
 import pluginWindowAPI from './plugin/window'
 import { setupImageAnalysisAPI } from './shared/imageAnalysis'
@@ -43,6 +44,7 @@ import zbrowserAPI from './plugin/zbrowser'
 import pluginFFmpegAPI from './plugin/ffmpeg'
 
 import httpServer from '../core/httpServer'
+import mcpServer from '../core/mcpServer'
 import superPanelManager from '../core/superPanelManager'
 
 /**
@@ -80,6 +82,7 @@ class APIManager {
     initPluginApiDispatcher()
 
     // 初始化插件API
+    pluginToolsAPI.init(pluginManager)
     pluginAiAPI.init(mainWindow, pluginManager)
     pluginLifecycleAPI.init(mainWindow, pluginManager)
     pluginUIAPI.init(mainWindow, pluginManager)
@@ -110,6 +113,9 @@ class APIManager {
     // 初始化 HTTP 服务
     httpServer.init().catch((error) => {
       console.error('[API] HTTP 服务初始化失败:', error)
+    })
+    mcpServer.init().catch((error) => {
+      console.error('[API] MCP 服务初始化失败:', error)
     })
 
     // 初始化超级面板管理器
