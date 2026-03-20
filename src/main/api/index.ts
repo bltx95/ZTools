@@ -114,6 +114,7 @@ class APIManager {
     httpServer.init().catch((error) => {
       console.error('[API] HTTP 服务初始化失败:', error)
     })
+    // 初始化 MCP 服务
     mcpServer.init().catch((error) => {
       console.error('[API] MCP 服务初始化失败:', error)
     })

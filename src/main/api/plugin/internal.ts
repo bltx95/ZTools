@@ -968,6 +968,7 @@ export class InternalPluginAPI {
       }
     })
 
+    // 查询 MCP 服务运行状态
     ipcMain.handle('internal:mcp-server-status', async (event) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {
         throw new PermissionDeniedError('internal:mcp-server-status')
@@ -975,6 +976,7 @@ export class InternalPluginAPI {
       return { success: true, running: mcpServer.isRunning() }
     })
 
+    // 获取所有已安装插件中声明的 MCP 工具列表
     ipcMain.handle('internal:mcp-server-tools', async (event) => {
       if (!requireInternalPlugin(this.pluginManager, event)) {
         throw new PermissionDeniedError('internal:mcp-server-tools')

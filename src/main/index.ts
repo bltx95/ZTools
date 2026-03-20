@@ -180,6 +180,7 @@ app.on('will-quit', () => {
   floatingBallManager.cleanup()
   // 关闭 HTTP 服务器
   httpServer.stop()
+  // 关闭 MCP 服务器
   mcpServer.stop()
 })
 

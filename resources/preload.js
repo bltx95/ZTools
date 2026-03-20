@@ -546,7 +546,7 @@ window.ztools = {
     clearHeaders: () => electron.ipcRenderer.sendSync('http-clear-headers')
   },
 
-  // 注册插件工具处理器；主进程会校验该工具已在 plugin.json 中声明。
+  // 注册插件工具处理器（用于 MCP 工具暴露）。
   registerTool: (name, handler) => {
     const toolName = typeof name === 'string' ? name.trim() : ''
     if (!toolName) {
@@ -912,13 +912,20 @@ window.ztools = {
     httpServerRegenerateKey: async () =>
       await electron.ipcRenderer.invoke('internal:http-server-regenerate-key'),
     httpServerStatus: async () => await electron.ipcRenderer.invoke('internal:http-server-status'),
+
+    // ==================== MCP 服务 API ====================
+    // 获取 MCP 服务配置（端口、密钥、启用状态）
     mcpServerGetConfig: async () =>
       await electron.ipcRenderer.invoke('internal:mcp-server-get-config'),
+    // 保存 MCP 服务配置，保存后会自动启停服务
     mcpServerSaveConfig: async (config) =>
       await electron.ipcRenderer.invoke('internal:mcp-server-save-config', config),
+    // 重新生成 MCP 访问密钥
     mcpServerRegenerateKey: async () =>
       await electron.ipcRenderer.invoke('internal:mcp-server-regenerate-key'),
+    // 查询 MCP 服务运行状态
     mcpServerStatus: async () => await electron.ipcRenderer.invoke('internal:mcp-server-status'),
+    // 获取所有已安装插件中声明的 MCP 工具列表
     mcpServerTools: async () => await electron.ipcRenderer.invoke('internal:mcp-server-tools'),
 
     // ==================== 调试日志 API ====================

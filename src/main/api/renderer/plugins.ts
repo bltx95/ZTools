@@ -199,6 +199,7 @@ export class PluginsAPI {
       }
     }
 
+    // 检查插件是否声明了 features 或 tools（至少需要一个）
     const hasFeatures = Array.isArray(pluginConfig.features) && pluginConfig.features.length > 0
     const hasTools =
       pluginConfig.tools &&
@@ -206,12 +207,13 @@ export class PluginsAPI {
       !Array.isArray(pluginConfig.tools) &&
       Object.keys(pluginConfig.tools).length > 0
 
+    // features 和 tools 不能同时为空
     if (!hasFeatures && !hasTools) {
       return { valid: false, error: 'features 和 tools 不能同时为空' }
     }
 
+    // 校验 features 字段（传统插件功能）
     if (hasFeatures) {
-      // 校验每个 feature 的字段
       for (const feature of pluginConfig.features) {
         if (!feature.code || !Array.isArray(feature.cmds)) {
           return { valid: false, error: 'feature 缺少必填字段 (code, cmds)' }
@@ -219,17 +221,21 @@ export class PluginsAPI {
       }
     }
 
+    // 校验 tools 字段（MCP 工具声明）
     if (hasTools) {
       for (const [toolName, tool] of Object.entries(pluginConfig.tools)) {
+        // 工具名必须使用小写 snake_case 命名（符合 MCP 规范）
         if (!/^[a-z][a-z0-9_]*$/.test(toolName)) {
           return { valid: false, error: `tools.${toolName} 必须使用小写 snake_case 命名` }
         }
         if (!tool || typeof tool !== 'object') {
           return { valid: false, error: `tools.${toolName} 配置无效` }
         }
+        // 必须提供工具描述
         if (typeof (tool as any).description !== 'string' || !(tool as any).description.trim()) {
           return { valid: false, error: `tools.${toolName}.description 必须是非空字符串` }
         }
+        // 必须提供 JSON Schema 格式的输入参数定义
         if (
           !(tool as any).inputSchema ||
           typeof (tool as any).inputSchema !== 'object' ||
@@ -240,6 +246,7 @@ export class PluginsAPI {
       }
     }
 
+    // 无界面插件（仅声明 tools，没有 main）的额外校验
     if (!pluginConfig.main && hasTools) {
       if (!pluginConfig.preload) {
         return { valid: false, error: '声明 tools 的插件必须提供 preload' }
