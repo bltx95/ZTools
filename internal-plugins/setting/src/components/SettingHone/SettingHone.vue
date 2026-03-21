@@ -1,18 +1,24 @@
 <script setup lang="ts">
 import { LeftMenu } from '@/components'
 import { onMounted } from 'vue'
-import { applyInitialAppearance } from './applyInitialAppearance'
+import { applyPrimaryColor, normalizePrimaryColor, normalizeTheme } from '@/utils'
+
+async function applyTheme(): Promise<void> {
+  try {
+    const data = await window.ztools.internal.dbGet('settings-general')
+    const theme = normalizeTheme(data?.theme)
+    const primaryColor = normalizePrimaryColor(data?.primaryColor)
+    const customColor = typeof data?.customColor === 'string' ? data.customColor : undefined
+
+    await window.ztools.internal.setTheme(theme)
+    applyPrimaryColor(primaryColor, customColor)
+  } catch (error) {
+    console.error('初始化主题失败:', error)
+  }
+}
 
 onMounted(() => {
-  // 页面挂载后立即应用已持久化的外观配置。
-  void applyInitialAppearance({
-    dbGet: (key) => window.ztools.internal.dbGet(key),
-    setTheme: (theme) => window.ztools.internal.setTheme(theme),
-    setWindowMaterial: (material) => window.ztools.internal.setWindowMaterial(material),
-    isWindows: window.ztools.isWindows()
-  }).catch((error) => {
-    console.error('初始化设置页外观失败:', error)
-  })
+  void applyTheme()
 })
 </script>
 
