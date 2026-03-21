@@ -1,32 +1,82 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useToast, AdaptiveIcon } from '@/components'
+import { useToast } from '@/components'
 import { compareVersions, upgradeInstalledPluginFromMarket, weightedSearch } from '@/utils'
-import { PluginDetail } from './components'
+import { PluginDetail, PluginCard, CategoryCard, CategoryDetail } from './components'
+import type { Plugin, CategoryInfo, CategoryLayoutSection } from './components'
 import { useJumpFunction, useZtoolsSubInput } from '@/composables'
 import { PluginMarketSettingJumpFunction } from '@/views/PluginMarketSetting/PluginMarketSetting'
 
 const { success, error, confirm } = useToast()
 
-interface Plugin {
-  name: string
+interface BannerItem {
+  image: string
+  url?: string
+  height?: number
+}
+
+interface CategorySummary {
+  key: string
   title: string
-  description: string
-  iconText?: string
-  iconColor?: string
-  logo?: string
+  description?: string
+  icon?: string
+  showDescription: boolean
+  pluginCount: number
+}
+
+interface StorefrontSection {
+  type: 'banner' | 'navigation' | 'fixed' | 'random'
+  key: string
+  title?: string
+  height?: number
+  items?: BannerItem[]
+  categories?: CategorySummary[]
+  plugins?: Plugin[]
+}
+
+interface StorefrontCategoryPayload {
+  key: string
+  title: string
+  description?: string
+  icon?: string
+  plugins: Array<{ name: string }>
+}
+
+interface StorefrontPayload {
+  sections: StorefrontSection[]
+  categories?: Record<string, StorefrontCategoryPayload>
+  categoryLayouts?: Record<string, CategoryLayoutSection[]>
+}
+
+interface MarketPlugin extends Omit<Plugin, 'installed'> {
+  platform?: string[]
+}
+
+interface InstalledPlugin {
+  name: string
+  path: string
   version: string
-  downloadUrl: string
-  installed: boolean
-  path?: string
-  localVersion?: string
+}
+
+interface PluginMarketResponse {
+  success: boolean
+  data?: MarketPlugin[]
+  storefront?: StorefrontPayload
+  error?: string
 }
 
 const plugins = ref<Plugin[]>([])
+const pluginMap = ref<Map<string, Plugin>>(new Map())
+const storefrontSections = ref<StorefrontSection[]>([])
+const storefrontCategories = ref<Record<string, CategoryInfo>>({})
+const categoryLayouts = ref<Record<string, CategoryLayoutSection[]>>({})
 const isLoading = ref(false)
 const installingPlugin = ref<string | null>(null)
 
 const { value: searchQuery, setSubInput } = useZtoolsSubInput('', '搜索插件市场...')
+
+// 搜索模式：有搜索词时使用扁平搜索
+const isSearchMode = computed(() => (searchQuery.value || '').trim().length > 0)
 
 const filteredPlugins = computed(() =>
   weightedSearch(plugins.value, searchQuery.value || '', [
@@ -35,45 +85,125 @@ const filteredPlugins = computed(() =>
   ])
 )
 
-// 详情弹窗状态
+// 是否有 storefront 数据可用
+const hasStorefront = computed(() => storefrontSections.value.length > 0)
+
+// 插件详情面板状态
 const isDetailVisible = ref(false)
-const selectedPlugin = ref<any | null>(null)
+const selectedPlugin = ref<Plugin | null>(null)
+
+// 分类详情面板状态
+const isCategoryDetailVisible = ref(false)
+const selectedCategory = ref<CategoryInfo | null>(null)
+
+// 是否显示主滚动内容（任一覆盖面板打开时隐藏）
+const showScrollableContent = computed(
+  () => !isDetailVisible.value && !isCategoryDetailVisible.value
+)
+
+// 将市场插件数据标记已安装状态
+function enrichPlugins(
+  marketPlugins: MarketPlugin[],
+  installedPlugins: InstalledPlugin[],
+  currentPlatform: string
+): Plugin[] {
+  return marketPlugins
+    .filter((plugin) => {
+      if (!plugin.platform || !Array.isArray(plugin.platform)) return true
+      return plugin.platform.includes(currentPlatform)
+    })
+    .map((plugin) => {
+      const installedPlugin = installedPlugins.find((item) => item.name === plugin.name)
+      return {
+        ...plugin,
+        installed: !!installedPlugin,
+        path: installedPlugin?.path,
+        localVersion: installedPlugin?.version
+      }
+    })
+}
 
 async function fetchPlugins(): Promise<void> {
   isLoading.value = true
   try {
-    // 获取当前平台（同步调用）
     const currentPlatform = window.ztools.internal.getPlatform()
-    // 并行获取市场列表和已安装插件列表
     const [marketResult, installedPlugins] = await Promise.all([
       window.ztools.internal.fetchPluginMarket(),
       window.ztools.internal.getPlugins()
     ])
 
-    if (marketResult.success && marketResult.data) {
-      const marketPlugins = marketResult.data
+    const typedMarketResult = marketResult as PluginMarketResponse
+    const typedInstalledPlugins = installedPlugins as InstalledPlugin[]
 
-      // 先过滤掉不适配当前平台的插件，然后标记已安装的插件
-      plugins.value = marketPlugins
-        .filter((p: any) => {
-          // 如果插件没有 platform 字段，默认支持所有平台
-          if (!p.platform || !Array.isArray(p.platform)) {
-            return true
+    if (typedMarketResult.success && typedMarketResult.data) {
+      const marketPlugins = typedMarketResult.data
+
+      // 构建带安装状态的插件扁平列表（用于搜索）
+      plugins.value = enrichPlugins(marketPlugins, typedInstalledPlugins, currentPlatform)
+
+      // 构建 pluginMap
+      const pMap = new Map<string, Plugin>()
+      for (const p of plugins.value) {
+        if (p.name) pMap.set(p.name, p)
+      }
+      pluginMap.value = pMap
+
+      // 构建 storefront sections
+      storefrontCategories.value = {}
+      categoryLayouts.value = {}
+
+      if (typedMarketResult.storefront?.sections) {
+        // 处理 categories（从后端返回的完整分类数据）
+        if (typedMarketResult.storefront.categories) {
+          const cats: Record<string, CategoryInfo> = {}
+          for (const [key, cat] of Object.entries(typedMarketResult.storefront.categories)) {
+            const categoryPlugins = cat.plugins
+              .map((plugin) => pMap.get(plugin.name))
+              .filter((plugin): plugin is Plugin => !!plugin)
+            cats[key] = {
+              key: cat.key,
+              title: cat.title,
+              description: cat.description,
+              icon: cat.icon,
+              plugins: categoryPlugins
+            }
           }
-          // 检查插件的 platform 数组是否包含当前平台
-          return p.platform.includes(currentPlatform)
-        })
-        .map((p: any) => {
-          const installedPlugin = installedPlugins.find((ip: any) => ip.name === p.name)
-          return {
-            ...p,
-            installed: !!installedPlugin,
-            path: installedPlugin ? installedPlugin.path : undefined,
-            localVersion: installedPlugin ? installedPlugin.version : undefined
-          }
-        })
+          storefrontCategories.value = cats
+        }
+
+        // 处理 categoryLayouts
+        if (typedMarketResult.storefront.categoryLayouts) {
+          categoryLayouts.value = typedMarketResult.storefront.categoryLayouts
+        }
+
+        // 处理 sections：将 fixed/random 中的插件替换为带安装状态的版本
+        storefrontSections.value = typedMarketResult.storefront.sections
+          .map((section) => {
+            if (
+              (section.type === 'fixed' || section.type === 'random') &&
+              Array.isArray(section.plugins)
+            ) {
+              return {
+                ...section,
+                plugins: section.plugins
+                  .map((p) => pMap.get(p.name))
+                  .filter((p): p is Plugin => !!p)
+              }
+            }
+            return section
+          })
+          .filter((section) =>
+            section.type === 'banner'
+              ? (section.items?.length ?? 0) > 0
+              : section.type === 'navigation'
+                ? (section.categories?.length ?? 0) > 0
+                : (section.plugins?.length ?? 0) > 0
+          )
+      } else {
+        storefrontSections.value = []
+      }
     } else {
-      console.error('获取插件市场列表失败:', marketResult.error)
+      console.error('获取插件市场列表失败:', typedMarketResult.error)
     }
   } catch (error) {
     console.error('获取插件列表出错:', error)
@@ -92,6 +222,19 @@ function closePluginDetail(): void {
   selectedPlugin.value = null
 }
 
+function openCategoryDetail(categorySummary: CategorySummary): void {
+  const category = storefrontCategories.value[categorySummary.key]
+  if (category) {
+    selectedCategory.value = category
+    isCategoryDetailVisible.value = true
+  }
+}
+
+function closeCategoryDetail(): void {
+  isCategoryDetailVisible.value = false
+  selectedCategory.value = null
+}
+
 async function handleOpenPlugin(plugin: Plugin): Promise<void> {
   if (!plugin.path) {
     error('无法打开插件: 路径未知')
@@ -101,17 +244,16 @@ async function handleOpenPlugin(plugin: Plugin): Promise<void> {
     const result = await window.ztools.internal.launch({
       path: plugin.path,
       type: 'plugin',
-      name: plugin.title || plugin.name, // 传递插件名称
+      name: plugin.title || plugin.name,
       param: {}
     })
 
-    // 检查返回结果
     if (result && !result.success) {
       error(`无法打开插件: ${result.error || '未知错误'}`)
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('打开插件失败:', err)
-    error(`打开插件失败: ${err.message || '未知错误'}`)
+    error(`打开插件失败: ${err instanceof Error ? err.message : '未知错误'}`)
   }
 }
 
@@ -143,23 +285,18 @@ async function handleUpgradePlugin(plugin: Plugin): Promise<void> {
       plugin
     )
     if (upgradeResult.success) {
-      console.log('插件升级成功:', plugin.name)
-      // 更新状态
       plugin.installed = true
       plugin.localVersion = plugin.version
-      // 更新 path，这样可以立即打开插件
       if (upgradeResult.plugin && upgradeResult.plugin.path) {
         plugin.path = upgradeResult.plugin.path
       }
-      // 重新获取列表以确保状态同步
       await fetchPlugins()
     } else {
       throw new Error(upgradeResult.error || '升级失败')
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('升级出错:', err)
-    error(`升级出错: ${err.message}`)
-    // 如果卸载成功但安装失败，可能需要刷新列表让用户重新下载
+    error(`升级出错: ${err instanceof Error ? err.message : '未知错误'}`)
     await fetchPlugins()
   } finally {
     installingPlugin.value = null
@@ -175,23 +312,18 @@ async function downloadPlugin(plugin: Plugin): Promise<void> {
       JSON.parse(JSON.stringify(plugin))
     )
     if (result.success) {
-      console.log('插件安装成功:', plugin.name)
-      // 更新状态，使用后端返回的插件信息
       plugin.installed = true
       plugin.localVersion = plugin.version
-      // 更新 path，这样可以立即打开插件
       if (result.plugin && result.plugin.path) {
         plugin.path = result.plugin.path
       }
-      // 重新获取列表以确保状态同步（可选）
-      // await fetchPlugins()
     } else {
       console.error('插件安装失败:', result.error)
       error(`安装失败: ${result.error}`)
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('安装出错:', err)
-    error(`安装出错: ${err.message}`)
+    error(`安装出错: ${err instanceof Error ? err.message : '未知错误'}`)
   } finally {
     installingPlugin.value = null
   }
@@ -204,7 +336,6 @@ async function handleUninstallPlugin(plugin: Plugin): Promise<void> {
   }
 
   try {
-    console.log('开始卸载插件:', plugin.name)
     const deleteResult = await window.ztools.internal.deletePlugin(plugin.path)
     if (!deleteResult.success) {
       error(`卸载失败: ${deleteResult.error}`)
@@ -212,30 +343,41 @@ async function handleUninstallPlugin(plugin: Plugin): Promise<void> {
     }
 
     success('插件卸载成功')
-    console.log('插件卸载成功:', plugin.name)
 
-    // 更新状态
     plugin.installed = false
     plugin.localVersion = undefined
     plugin.path = undefined
 
-    // 关闭详情页面
     closePluginDetail()
-
-    // 刷新列表
     await fetchPlugins()
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('卸载出错:', err)
-    error(`卸载出错: ${err.message}`)
+    error(`卸载出错: ${err instanceof Error ? err.message : '未知错误'}`)
   }
 }
 
-// 处理 ESC 按键
-function handleKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape' && isDetailVisible.value) {
-    e.stopPropagation()
-    closePluginDetail()
+function handleBannerClick(item: BannerItem): void {
+  if (item.url) {
+    window.open(item.url, '_blank')
   }
+}
+
+// 处理 ESC 按键 - 逐级返回
+function handleKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    if (isDetailVisible.value) {
+      e.stopPropagation()
+      closePluginDetail()
+    } else if (isCategoryDetailVisible.value) {
+      e.stopPropagation()
+      closeCategoryDetail()
+    }
+  }
+}
+
+// 获取分类的布局配置
+function getCategoryLayout(categoryKey: string): CategoryLayoutSection[] {
+  return categoryLayouts.value[categoryKey] || categoryLayouts.value['default'] || []
 }
 
 useJumpFunction<PluginMarketSettingJumpFunction>((state) => {
@@ -257,122 +399,166 @@ onUnmounted(() => {
   <div class="plugin-market">
     <!-- 可滚动内容区 -->
     <Transition name="list-slide">
-      <div v-show="!isDetailVisible" class="scrollable-content">
+      <div v-show="showScrollableContent" class="scrollable-content">
         <div v-if="isLoading" class="loading-state">
           <div class="loading-spinner"></div>
           <span>加载中...</span>
         </div>
-        <div v-else-if="filteredPlugins.length === 0" class="empty-state">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
-            <path d="M16 16L20 20" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-          </svg>
-          <span>未找到匹配的插件</span>
-        </div>
-        <div v-else class="market-grid">
-          <div
-            v-for="plugin in filteredPlugins"
-            :key="plugin.name"
-            class="card plugin-card"
-            :title="plugin.description"
-            @click="openPluginDetail(plugin)"
-          >
-            <div class="plugin-icon">
-              <AdaptiveIcon
-                :src="plugin.logo ?? ''"
-                class="plugin-logo-img"
-                alt="icon"
-                draggable="false"
+
+        <!-- 搜索模式：扁平网格 -->
+        <template v-else-if="isSearchMode">
+          <div v-if="filteredPlugins.length === 0" class="empty-state">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+              <path
+                d="M16 16L20 20"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
               />
-            </div>
-            <div class="plugin-info">
-              <div class="plugin-name">{{ plugin.title || plugin.name }}</div>
-              <div class="plugin-description" :title="plugin.description">
-                {{ plugin.description }}
-              </div>
-            </div>
-            <div class="plugin-action">
-              <template v-if="plugin.installed">
-                <button
-                  v-if="canUpgrade(plugin)"
-                  class="btn btn-md btn-warning"
-                  :disabled="installingPlugin === plugin.name"
-                  @click.stop="handleUpgradePlugin(plugin)"
-                >
-                  <div v-if="installingPlugin === plugin.name" class="btn-loading">
-                    <div class="spinner"></div>
-                  </div>
-                  <span v-else>升级</span>
-                </button>
-                <button
-                  v-else
-                  class="icon-btn open-btn"
-                  title="打开"
-                  @click.stop="handleOpenPlugin(plugin)"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                  </svg>
-                </button>
-              </template>
-              <button
-                v-else
-                class="icon-btn download-btn"
-                title="下载"
-                :disabled="installingPlugin === plugin.name"
-                @click.stop="downloadPlugin(plugin)"
-              >
-                <div v-if="installingPlugin === plugin.name" class="spinner"></div>
-                <svg
-                  v-else
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path
-                    d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M7 10L12 15L17 10"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                  <path
-                    d="M12 15V3"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
-              </button>
-            </div>
+            </svg>
+            <span>未找到匹配的插件</span>
           </div>
-        </div>
+          <div v-else class="market-grid">
+            <PluginCard
+              v-for="plugin in filteredPlugins"
+              :key="plugin.name"
+              :plugin="plugin"
+              :installing-plugin="installingPlugin"
+              :can-upgrade="canUpgrade(plugin)"
+              @click="openPluginDetail(plugin)"
+              @open="handleOpenPlugin(plugin)"
+              @download="downloadPlugin(plugin)"
+              @upgrade="handleUpgradePlugin(plugin)"
+            />
+          </div>
+        </template>
+
+        <!-- 首页模式：storefront 布局 -->
+        <template v-else-if="hasStorefront">
+          <div class="storefront">
+            <template v-for="section in storefrontSections" :key="section.key">
+              <!-- Banner 区块 -->
+              <div v-if="section.type === 'banner'" class="storefront-banner">
+                <div
+                  v-for="(item, idx) in section.items"
+                  :key="idx"
+                  class="banner-item"
+                  :class="{ clickable: !!item.url }"
+                  :style="section.height ? { height: `${section.height}px` } : undefined"
+                  @click="handleBannerClick(item)"
+                >
+                  <img :src="item.image" alt="" class="banner-image" draggable="false" />
+                </div>
+              </div>
+
+              <!-- 分类导航区块 -->
+              <div v-else-if="section.type === 'navigation'" class="storefront-section">
+                <div v-if="section.title" class="section-header">
+                  <span class="section-title">{{ section.title }}</span>
+                </div>
+                <div class="navigation-grid">
+                  <CategoryCard
+                    v-for="cat in section.categories"
+                    :key="cat.key"
+                    :title="cat.title"
+                    :description="cat.description"
+                    :icon="cat.icon"
+                    :show-description="cat.showDescription"
+                    :plugin-count="cat.pluginCount"
+                    @click="openCategoryDetail(cat)"
+                  />
+                </div>
+              </div>
+
+              <!-- Fixed / Random 区块 -->
+              <div
+                v-else-if="section.type === 'fixed' || section.type === 'random'"
+                class="storefront-section"
+              >
+                <div v-if="section.title" class="section-header">
+                  <span class="section-title">{{ section.title }}</span>
+                </div>
+                <div class="market-grid">
+                  <PluginCard
+                    v-for="plugin in section.plugins"
+                    :key="plugin.name"
+                    :plugin="plugin"
+                    :installing-plugin="installingPlugin"
+                    :can-upgrade="canUpgrade(plugin)"
+                    @click="openPluginDetail(plugin)"
+                    @open="handleOpenPlugin(plugin)"
+                    @download="downloadPlugin(plugin)"
+                    @upgrade="handleUpgradePlugin(plugin)"
+                  />
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+
+        <!-- 降级模式：无 storefront 时平铺展示 -->
+        <template v-else>
+          <div v-if="plugins.length === 0" class="empty-state">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+              <path
+                d="M16 16L20 20"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </svg>
+            <span>暂无插件</span>
+          </div>
+          <div v-else class="market-grid">
+            <PluginCard
+              v-for="plugin in plugins"
+              :key="plugin.name"
+              :plugin="plugin"
+              :installing-plugin="installingPlugin"
+              :can-upgrade="canUpgrade(plugin)"
+              @click="openPluginDetail(plugin)"
+              @open="handleOpenPlugin(plugin)"
+              @download="downloadPlugin(plugin)"
+              @upgrade="handleUpgradePlugin(plugin)"
+            />
+          </div>
+        </template>
+      </div>
+    </Transition>
+
+    <!-- 分类详情覆盖面板 -->
+    <Transition name="slide">
+      <div
+        v-if="isCategoryDetailVisible && selectedCategory"
+        class="category-panel-container"
+        :class="{ 'shifted-left': isDetailVisible }"
+      >
+        <CategoryDetail
+          :category="selectedCategory"
+          :layout="getCategoryLayout(selectedCategory.key)"
+          :installing-plugin="installingPlugin"
+          :plugin-map="pluginMap"
+          :can-upgrade="canUpgrade"
+          @back="closeCategoryDetail"
+          @click-plugin="openPluginDetail"
+          @open-plugin="handleOpenPlugin"
+          @download-plugin="downloadPlugin"
+          @upgrade-plugin="handleUpgradePlugin"
+        />
       </div>
     </Transition>
 
@@ -394,11 +580,11 @@ onUnmounted(() => {
 
 <style scoped>
 .plugin-market {
-  position: relative; /* 使详情面板能够覆盖该区域 */
+  position: relative;
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* 防止滑动时出现滚动条 */
+  overflow: hidden;
 }
 
 /* 可滚动内容区 */
@@ -444,81 +630,86 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-.market-grid {
+/* Storefront 布局 */
+.storefront {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Banner */
+.storefront-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.banner-item {
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+
+.banner-item.clickable {
+  cursor: pointer;
+}
+.banner-item.clickable:hover {
+  opacity: 0.92;
+}
+.banner-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+/* Section 通用 */
+.storefront-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+/* 分类详情容器（支持左移动画） */
+.category-panel-container {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg-color);
+  transition: transform 0.2s ease-out;
+}
+
+.category-panel-container.shifted-left {
+  transform: translateX(-100%);
+}
+
+/* 分类导航网格 */
+.navigation-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
-.plugin-card {
-  display: flex;
-  align-items: center;
-  padding: 12px 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 0;
-}
-
-.plugin-card:hover {
-  background: var(--hover-bg);
-  transform: translateX(2px);
-}
-
-.plugin-icon {
-  flex-shrink: 0;
-  margin-right: 12px;
-}
-
-.plugin-logo-img {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  object-fit: cover;
-}
-
-.plugin-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.plugin-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-color);
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plugin-description {
-  font-size: 12px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.plugin-action {
-  flex-shrink: 0;
-  margin-left: 10px;
-}
-
-/* 图标按钮颜色样式 */
-.open-btn {
-  color: var(--primary-color);
-}
-
-.open-btn:hover:not(:disabled) {
-  background: var(--primary-light-bg);
-}
-
-.download-btn {
-  color: var(--primary-color);
-}
-
-.download-btn:hover:not(:disabled) {
-  background: var(--primary-light-bg);
+/* 插件网格 */
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 
 .loading-state {
@@ -568,28 +759,5 @@ onUnmounted(() => {
   to {
     transform: rotate(360deg);
   }
-}
-
-/* 按钮 loading 状态 */
-.btn-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid transparent;
-  border-top-color: currentColor;
-  border-right-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-/* 升级按钮中的 spinner */
-.btn-warning .spinner {
-  border-top-color: var(--text-on-primary);
-  border-right-color: var(--text-on-primary);
 }
 </style>

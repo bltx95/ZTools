@@ -70,7 +70,12 @@ declare global {
       getAllPlugins: () => Promise<any[]>
       importPlugin: () => Promise<{ success: boolean; error?: string }>
       importDevPlugin: () => Promise<{ success: boolean; error?: string }>
-      fetchPluginMarket: () => Promise<{ success: boolean; data?: any; error?: string }>
+      fetchPluginMarket: () => Promise<{
+        success: boolean
+        data?: any
+        storefront?: any
+        error?: string
+      }>
       installPluginFromMarket: (plugin: any) => Promise<{
         success: boolean
         error?: string

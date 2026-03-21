@@ -89,7 +89,12 @@ declare global {
         openApp: (appPath: string) => Promise<void>
 
         // 插件市场
-        fetchPluginMarket: () => Promise<{ success: boolean; data?: any; error?: string }>
+        fetchPluginMarket: () => Promise<{
+          success: boolean
+          data?: any
+          storefront?: any
+          error?: string
+        }>
         installPluginFromMarket: (plugin: any) => Promise<{
           success: boolean
           error?: string
