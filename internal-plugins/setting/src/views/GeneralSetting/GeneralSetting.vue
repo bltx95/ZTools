@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   DEFAULT_AVATAR,
   DEFAULT_PLACEHOLDER,
@@ -114,28 +114,7 @@ const hotkeyPresets = computed(() => {
   ]
 })
 
-// 快捷键快捷设置下拉菜单选项（包含预设和重置）
-const hotkeyQuickActionsOptions = computed(() => {
-  const options = [...hotkeyPresets.value]
-  // 添加重置选项
-  options.push({ label: '重置', value: '__reset__' })
-  return options
-})
-
-// 快捷键快捷设置选择的值（用于下拉菜单）
-const hotkeyQuickAction = ref('')
-
-// 处理快捷键快捷设置选择
-async function handleHotkeyQuickActionChange(value: string | number): Promise<void> {
-  const actionValue = String(value)
-  if (actionValue === '__reset__') {
-    await resetHotkey()
-  } else {
-    await applyHotkeyPreset(actionValue)
-  }
-  // 清空选择，避免下拉菜单一直显示选中状态
-  hotkeyQuickAction.value = ''
-}
+const showHotkeyQuickActions = ref(false)
 
 // 本地状态（替代 windowStore）
 const theme = ref<ThemeType>('system')
@@ -308,6 +287,24 @@ async function resetHotkey(): Promise<void> {
     console.error('重置快捷键失败:', err)
     error(`重置快捷键失败: ${err.message || '未知错误'}`)
   }
+}
+
+function handleQuickActionsClickOutside(): void {
+  showHotkeyQuickActions.value = false
+}
+
+function toggleHotkeyQuickActions(): void {
+  showHotkeyQuickActions.value = !showHotkeyQuickActions.value
+}
+
+async function handleHotkeyPresetSelect(preset: string): Promise<void> {
+  await applyHotkeyPreset(preset)
+  showHotkeyQuickActions.value = false
+}
+
+async function handleHotkeyResetClick(): Promise<void> {
+  await resetHotkey()
+  showHotkeyQuickActions.value = false
 }
 
 // 处理不透明度变化
@@ -653,14 +650,15 @@ function pollTranslationStatus(): void {
 }
 
 // 处理超级面板触发模式变化
-async function handleSuperPanelTriggerModeChange(mode: string): Promise<void> {
+async function handleSuperPanelTriggerModeChange(mode: string | number): Promise<void> {
   try {
+    const triggerMode = String(mode)
     let mouseButton: MouseButtonType
     let longPressMs: number
 
-    if (mode.endsWith('-long')) {
+    if (triggerMode.endsWith('-long')) {
       // 长按模式
-      mouseButton = mode.replace('-long', '') as MouseButtonType
+      mouseButton = triggerMode.replace('-long', '') as MouseButtonType
       // 如果之前的长按时间太短或为0，设置为默认200ms
       longPressMs =
         superPanelLongPressMs.value && superPanelLongPressMs.value >= 200
@@ -668,7 +666,7 @@ async function handleSuperPanelTriggerModeChange(mode: string): Promise<void> {
           : 200
     } else {
       // 短按模式
-      mouseButton = mode as MouseButtonType
+      mouseButton = triggerMode as MouseButtonType
       longPressMs = 0
     }
 
@@ -682,7 +680,7 @@ async function handleSuperPanelTriggerModeChange(mode: string): Promise<void> {
       mouseButton: superPanelMouseButton.value,
       longPressMs: superPanelLongPressMs.value
     })
-    console.log('超级面板触发模式已更新:', mode)
+    console.log('超级面板触发模式已更新:', triggerMode)
   } catch (err) {
     console.error('更新超级面板触发模式失败:', err)
   }
@@ -938,7 +936,6 @@ async function handleProxyEnabledChange(): Promise<void> {
     console.error('更新代理开关失败:', error)
     // 恢复状态
     proxyEnabled.value = !proxyEnabled.value
-    error('更新代理开关失败')
   }
 }
 
@@ -1156,6 +1153,11 @@ async function saveSettings(): Promise<void> {
 onMounted(() => {
   loadSettings()
   getPlatformInfo()
+  document.addEventListener('click', handleQuickActionsClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleQuickActionsClickOutside)
 })
 </script>
 
@@ -1172,13 +1174,46 @@ onMounted(() => {
         </div>
         <div class="setting-control">
           <HotkeyInput v-model="hotkey" :platform="platform" @change="handleHotkeyChange" />
-          <Dropdown
-            v-model="hotkeyQuickAction"
-            :options="hotkeyQuickActionsOptions"
-            placeholder="快捷设置"
-            style="min-width: 160px"
-            @change="handleHotkeyQuickActionChange"
-          />
+          <div class="quick-actions-wrapper">
+            <button
+              type="button"
+              class="icon-btn quick-actions-trigger"
+              :class="{ active: showHotkeyQuickActions }"
+              title="快捷设置"
+              @click.stop="toggleHotkeyQuickActions"
+            >
+              <div class="i-z-settings font-size-16px" />
+            </button>
+            <Transition name="dropdown">
+              <div v-if="showHotkeyQuickActions" class="quick-actions-dropdown" @click.stop>
+                <button
+                  v-for="preset in hotkeyPresets"
+                  :key="preset.value"
+                  type="button"
+                  class="quick-actions-item"
+                  :class="{ active: hotkey === preset.value }"
+                  @click="handleHotkeyPresetSelect(preset.value)"
+                >
+                  <div class="quick-actions-item-info">
+                    <span class="quick-actions-item-label">{{ preset.label }}</span>
+                    <span class="quick-actions-item-desc">快速应用该快捷键预设</span>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  class="quick-actions-item quick-actions-item-reset"
+                  @click="handleHotkeyResetClick"
+                >
+                  <div class="quick-actions-item-info">
+                    <span class="quick-actions-item-label">重置</span>
+                    <span class="quick-actions-item-desc"
+                      >恢复为默认快捷键 {{ defaultHotkey }}</span
+                    >
+                  </div>
+                </button>
+              </div>
+            </Transition>
+          </div>
         </div>
       </div>
 
@@ -2019,6 +2054,106 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.quick-actions-wrapper {
+  position: relative;
+}
+
+.quick-actions-trigger {
+  color: var(--text-secondary);
+}
+
+.quick-actions-trigger:hover {
+  background: var(--hover-bg);
+  color: var(--primary-color);
+}
+
+.quick-actions-trigger.active {
+  background: var(--hover-bg);
+  color: var(--primary-color);
+}
+
+.quick-actions-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 240px;
+  background: var(--dialog-bg, var(--bg-color));
+  border: 1px solid var(--divider-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px var(--shadow-color);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.quick-actions-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  gap: 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.quick-actions-item + .quick-actions-item {
+  border-top: 1px solid var(--divider-color);
+}
+
+.quick-actions-item:hover {
+  background: var(--hover-bg);
+}
+
+.quick-actions-item.active {
+  background: var(--primary-light-bg);
+}
+
+.quick-actions-item-reset:hover .quick-actions-item-label {
+  color: var(--primary-color);
+}
+
+.quick-actions-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quick-actions-item-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.quick-actions-item-desc {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-secondary);
+}
+
+.dropdown-enter-active {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.dropdown-leave-active {
+  transition:
+    opacity 0.1s ease,
+    transform 0.1s ease;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
 }
 
 /* 不透明度控制 */
