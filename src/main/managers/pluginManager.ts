@@ -1182,6 +1182,29 @@ export class PluginManager {
         featureCode
       })
       if (assembly) this.assemblyCoordinator.markSessionStatus(assembly, 'displayed')
+    } else if (mode === 'list') {
+      // 列表模式：在插件的 WebContentsView 内渲染列表 UI
+      if (assembly) {
+        this.assemblyCoordinator.markSessionStatus(assembly, 'readyToDisplay')
+        const ack = await this.assemblyCoordinator.requestRendererAck(this.mainWindow, assembly)
+        if (!ack || !this.assemblyCoordinator.isActiveSession(assembly)) return
+      }
+
+      // 使用默认高度显示插件视图（preload 会通过 setExpendHeight 动态调整）
+      const cached = this.pluginViews.find((v) => v.path === pluginPath)
+      let targetHeight = cached?.height || this.pluginDefaultHeight
+      if (targetHeight <= 0) targetHeight = this.pluginDefaultHeight
+      this.setExpendHeight(targetHeight, true)
+
+      // 通知插件的 preload 激活列表模式（preload 会自行渲染 UI、设置子输入框）
+      view.webContents.send('activate-list-mode', {
+        featureCode,
+        action: api.getLaunchParam(),
+        pluginPath
+      })
+
+      this.recordEnterState(pluginPath, featureCode)
+      if (assembly) this.assemblyCoordinator.markSessionStatus(assembly, 'displayed')
     } else {
       if (assembly) {
         this.assemblyCoordinator.markSessionStatus(assembly, 'readyToDisplay')

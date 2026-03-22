@@ -1303,6 +1303,247 @@ electron.ipcRenderer.on('get-plugin-mode', (event, { featureCode, callId }) => {
   electron.ipcRenderer.send(`plugin-mode-result-${callId}`, mode)
 })
 
+// ==================== 列表模式 (mode: 'list') ====================
+;(function () {
+  var listState = {
+    active: false,
+    items: [],
+    selectedIndex: 0,
+    container: null,
+    keyHandler: null,
+    ignoreMouseHover: false
+  }
+
+  var LIST_CSS = [
+    '* { margin:0; padding:0; box-sizing:border-box; }',
+    'body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; overflow:hidden;}',
+    '.ztools-list { max-height:100vh; overflow-y:auto; overflow-x:hidden; padding:0 0 2px 0; }',
+    '.ztools-li { display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:6px; cursor:pointer; transition:background-color .15s; user-select:none; }',
+    '.ztools-li:hover { background:rgba(0,0,0,.05); }',
+    '.ztools-li.selected { background:rgba(0,0,0,.05); }',
+    '.ztools-list.ignore-mouse-hover .ztools-li:hover { background:transparent; }',
+    '.ztools-li-icon { flex-shrink:0; width:32px; height:32px; display:flex; align-items:center; justify-content:center; }',
+    '.ztools-li-icon img { width:100%; height:100%; object-fit:contain; }',
+    '.ztools-li-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }',
+    '.ztools-li-title { font-size:14px; font-weight:500; color:#1a1a1a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }',
+    '.ztools-li-desc { font-size:12px; color:#666; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }',
+    '@media(prefers-color-scheme:dark){',
+    '  .ztools-li:hover { background:rgba(255,255,255,.08); }',
+    '  .ztools-li.selected { background:rgba(255,255,255,.08); }',
+    '  .ztools-list.ignore-mouse-hover .ztools-li:hover { background:transparent; }',
+    '  .ztools-li-title { color:#e5e5e5; }',
+    '  .ztools-li-desc { color:#999; }',
+    '}'
+  ].join('\n')
+
+  function injectListUI() {
+    document.head.innerHTML = ''
+    document.body.innerHTML = ''
+    document.body.style.cssText = 'margin:0;padding:0;overflow:hidden;'
+    var style = document.createElement('style')
+    style.textContent = LIST_CSS
+    document.head.appendChild(style)
+    var container = document.createElement('div')
+    container.className = 'ztools-list'
+    document.body.appendChild(container)
+    listState.container = container
+  }
+
+  function syncMouseHoverState() {
+    if (!listState.container) return
+    listState.container.classList.toggle('ignore-mouse-hover', !!listState.ignoreMouseHover)
+  }
+
+  function renderItems(items, pluginPath) {
+    listState.items = items || []
+    listState.selectedIndex = 0
+    var container = listState.container
+    if (!container) return
+    syncMouseHoverState()
+    container.innerHTML = ''
+    for (var i = 0; i < listState.items.length; i++) {
+      var item = listState.items[i]
+      var div = document.createElement('div')
+      div.className = 'ztools-li' + (i === 0 ? ' selected' : '')
+      div.dataset.index = i
+
+      var iconDiv = document.createElement('div')
+      iconDiv.className = 'ztools-li-icon'
+      if (item.icon) {
+        var img = document.createElement('img')
+        // 解析图标路径
+        var iconSrc = item.icon
+        if (
+          iconSrc &&
+          !iconSrc.startsWith('http') &&
+          !iconSrc.startsWith('file:') &&
+          !iconSrc.startsWith('data:') &&
+          pluginPath
+        ) {
+          iconSrc = 'file://' + pluginPath.replace(/\\/g, '/') + '/' + iconSrc
+        }
+        img.src = iconSrc
+        img.draggable = false
+        img.onerror = function () {
+          this.style.display = 'none'
+        }
+        iconDiv.appendChild(img)
+      }
+      div.appendChild(iconDiv)
+
+      var bodyDiv = document.createElement('div')
+      bodyDiv.className = 'ztools-li-body'
+      var titleDiv = document.createElement('div')
+      titleDiv.className = 'ztools-li-title'
+      titleDiv.textContent = item.title || ''
+      bodyDiv.appendChild(titleDiv)
+      if (item.description) {
+        var descDiv = document.createElement('div')
+        descDiv.className = 'ztools-li-desc'
+        descDiv.textContent = item.description
+        bodyDiv.appendChild(descDiv)
+      }
+      div.appendChild(bodyDiv)
+      ;(function (idx) {
+        div.addEventListener('mousemove', function () {
+          if (listState.ignoreMouseHover) {
+            listState.ignoreMouseHover = false
+            syncMouseHoverState()
+          }
+          if (listState.selectedIndex === idx) return
+          listState.selectedIndex = idx
+          updateSelection()
+        })
+
+        div.addEventListener('mouseenter', function () {
+          if (listState.ignoreMouseHover) return
+          if (listState.selectedIndex === idx) return
+          listState.selectedIndex = idx
+          updateSelection()
+        })
+      })(i)
+      ;(function (idx) {
+        div.addEventListener('click', function () {
+          listState.selectedIndex = idx
+          updateSelection()
+          doSelect()
+        })
+      })(i)
+
+      container.appendChild(div)
+    }
+    updateHeight()
+  }
+
+  function updateSelection() {
+    var nodes = listState.container ? listState.container.querySelectorAll('.ztools-li') : []
+    for (var i = 0; i < nodes.length; i++) {
+      if (i === listState.selectedIndex) {
+        nodes[i].classList.add('selected')
+      } else {
+        nodes[i].classList.remove('selected')
+      }
+    }
+    var sel = listState.container && listState.container.querySelector('.ztools-li.selected')
+    if (sel) sel.scrollIntoView({ block: 'nearest' })
+  }
+
+  function updateHeight() {
+    var container = listState.container
+    if (!container || container.children.length === 0) {
+      window.ztools.setExpendHeight(0)
+      return
+    }
+    var height = Math.min(container.scrollHeight, 541)
+    window.ztools.setExpendHeight(height)
+  }
+
+  function doSelect() {
+    var item = listState.items[listState.selectedIndex]
+    if (!item || !listState._selectFn) return
+    listState._selectFn(listState._action, item, function (items) {
+      renderItems(items, listState._pluginPath)
+    })
+  }
+
+  function handleListKeydown(e) {
+    if (!listState.active) return
+    var maxIdx = listState.items.length - 1
+    if (maxIdx < 0) return
+    if (e.key === 'ArrowUp' || e.key === 'Up') {
+      e.preventDefault()
+      listState.ignoreMouseHover = true
+      syncMouseHoverState()
+      if (listState.selectedIndex > 0) {
+        listState.selectedIndex--
+      } else {
+        listState.selectedIndex = maxIdx
+      }
+      updateSelection()
+    } else if (e.key === 'ArrowDown' || e.key === 'Down') {
+      e.preventDefault()
+      listState.ignoreMouseHover = true
+      syncMouseHoverState()
+      if (listState.selectedIndex < maxIdx) {
+        listState.selectedIndex++
+      } else {
+        listState.selectedIndex = 0
+      }
+      updateSelection()
+    } else if (e.key === 'Enter' || e.key === 'Return') {
+      e.preventDefault()
+      doSelect()
+    }
+  }
+
+  electron.ipcRenderer.on('activate-list-mode', function (event, data) {
+    var featureCode = data.featureCode
+    var action = data.action
+    var pluginPath = data.pluginPath
+    var feature = window.exports && window.exports[featureCode]
+    if (!feature || feature.mode !== 'list') return
+
+    // 注入或重置 UI
+    if (!listState.active) {
+      injectListUI()
+      listState.keyHandler = handleListKeydown
+      document.addEventListener('keydown', listState.keyHandler)
+      listState.active = true
+    } else {
+      // 重入：清空列表
+      if (listState.container) listState.container.innerHTML = ''
+    }
+
+    listState.ignoreMouseHover = false
+    syncMouseHoverState()
+    listState._action = action
+    listState._pluginPath = pluginPath
+    listState._selectFn =
+      feature.args && typeof feature.args.select === 'function' ? feature.args.select : null
+
+    var callbackSetList = function (items) {
+      renderItems(items, pluginPath)
+    }
+
+    // 设置子输入框（搜索）
+    if (feature.args && typeof feature.args.search === 'function') {
+      var searchFn = feature.args.search
+      window.ztools.setSubInput(
+        function (details) {
+          searchFn(action, details.text, callbackSetList)
+        },
+        feature.args.placeholder || '搜索',
+        true
+      )
+    }
+
+    // 调用 enter
+    if (feature.args && typeof feature.args.enter === 'function') {
+      feature.args.enter(action, callbackSetList)
+    }
+  })
+})()
+
 // 监听主进程发送的窗口材质更新事件
 electron.ipcRenderer.on('update-window-material', (event, material) => {
   if (windowMaterialChangeCallback) windowMaterialChangeCallback(material)

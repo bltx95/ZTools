@@ -998,7 +998,6 @@ onUnmounted(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-color);
   outline: none;
   overflow: hidden; /* 隐藏所有滚动条 */
   border-radius: 8px; /* Windows 11 圆角 */
@@ -1011,7 +1010,6 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-color);
   /* overflow: hidden; 隐藏所有滚动条 */
   /* border-radius: 8px; Windows 11 圆角 */
 }

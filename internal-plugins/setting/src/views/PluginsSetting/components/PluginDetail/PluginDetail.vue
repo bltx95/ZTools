@@ -689,7 +689,7 @@ watch(
               </div>
               <div class="settings-dropdown-item">
                 <div class="settings-item-info">
-                  <span class="settings-item-label">跟随启动2</span>
+                  <span class="settings-item-label">跟随启动</span>
                   <span class="settings-item-desc">跟随主程序同时启动运行</span>
                 </div>
                 <label class="toggle">

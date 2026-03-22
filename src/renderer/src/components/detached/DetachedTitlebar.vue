@@ -564,12 +564,16 @@ function sendKeyToPlugin(key: string): void {
   }, 10)
 }
 </script>
+<style>
+body {
+  background: var(--titlebar-bg);
+}
+</style>
 
 <style scoped>
 .titlebar {
   width: 100%;
   height: 52px;
-  background: var(--titlebar-bg);
   display: flex;
   align-items: center;
   gap: 8px;

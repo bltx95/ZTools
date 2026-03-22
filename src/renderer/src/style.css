@@ -35,7 +35,7 @@ body::-webkit-scrollbar {
 
 /* macOS 下使用透明背景 */
 .os-mac:root {
-  --bg-color: #f4f4f44f;
+  --bg-color: #f4f4f4ab;
 }
 
 /* Windows 下默认使用普通背景色 */
@@ -113,7 +113,7 @@ body::-webkit-scrollbar {
 
   /* macOS 暗色模式下使用透明背景 */
   .os-mac:root {
-    --bg-color: #3031334f;
+    --bg-color: #303133ab;
   }
 
   /* Windows 暗色模式下默认使用普通背景色 */

@@ -153,7 +153,7 @@ body::-webkit-scrollbar {
 
   /* macOS 暗色模式下使用透明背景 */
   .os-mac:root {
-    --bg-color: #3031334f;
+    --bg-color: transparent;
   }
 
   /* Windows 暗色模式下默认使用普通背景色 */
@@ -230,7 +230,6 @@ body {
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-color);
   color: var(--text-color);
 
   /* 使用 color-mix 计算 hover 和 light-bg */
