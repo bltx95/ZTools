@@ -296,6 +296,57 @@ export class PluginManager {
     this.pluginLastEnterState.set(pluginPath, { featureCode, cmdType })
   }
 
+  /**
+   * 复用已存在的分离窗口单例插件。
+   * 必须在主窗口切换/隐藏当前插件之前调用，避免“只是聚焦已有分离窗口”却误退主窗口当前插件。
+   */
+  public async reuseDetachedSingletonIfExists(
+    pluginPath: string,
+    featureCode: string,
+    source: 'main-window' | 'detached-window' | 'launch-precheck'
+  ): Promise<boolean> {
+    if (this.isPluginMultiOpenAllowed(pluginPath)) {
+      return false
+    }
+
+    const detachedView = detachedWindowManager.getViewByPlugin(pluginPath)
+    if (!detachedView) {
+      return false
+    }
+
+    console.log('[Plugin] 复用已存在的分离窗口单例插件:', {
+      pluginPath,
+      featureCode,
+      source
+    })
+    detachedWindowManager.focusByPlugin(pluginPath)
+
+    if (!this.shouldSkipReEnter(pluginPath, featureCode)) {
+      console.log('[Plugin] 分离窗口单例重入，触发 onPluginEnter:', {
+        pluginPath,
+        featureCode,
+        source
+      })
+      const enterPayload = this.assemblyCoordinator.buildEnterPayload(
+        api.getLaunchParam() as EnterPayload
+      )
+      await this.assemblyCoordinator.dispatchLifecycleEvent(
+        detachedView,
+        'PluginEnter',
+        enterPayload
+      )
+      this.recordEnterState(pluginPath, featureCode)
+    } else {
+      console.log('[Plugin] 分离窗口单例同文本指令重入，仅聚焦:', {
+        pluginPath,
+        featureCode,
+        source
+      })
+    }
+
+    return true
+  }
+
   public init(mainWindow: BrowserWindow): void {
     this.mainWindow = mainWindow
   }
@@ -307,6 +358,15 @@ export class PluginManager {
     cmdName?: string
   ): Promise<void> {
     if (!this.mainWindow) return
+
+    // 先尝试复用已存在的分离窗口单例插件，再决定是否切走主窗口当前插件。
+    // 这里顺序不能后置，否则设置页等主窗口插件入口会先被 hide，再发现目标其实只需要聚焦已有分离窗口。
+    if (
+      this.currentPluginPath !== pluginPath &&
+      (await this.reuseDetachedSingletonIfExists(pluginPath, featureCode, 'main-window'))
+    ) {
+      return
+    }
 
     // 先处理当前视图切换，再开始新装配会话，避免 hidePluginView 误中断新会话
     if (this.currentPluginPath != null && this.currentPluginPath !== pluginPath) {
@@ -348,30 +408,6 @@ export class PluginManager {
         await this.processPluginMode(pluginPath, featureCode, cached.view, assembly)
       }
       return
-    }
-
-    // 单例检查：插件不允许多开 且 已有分离窗口 → 聚焦已有窗口，按需触发 onPluginEnter
-    if (!this.isPluginMultiOpenAllowed(pluginPath)) {
-      const detachedView = detachedWindowManager.getViewByPlugin(pluginPath)
-      if (detachedView) {
-        detachedWindowManager.focusByPlugin(pluginPath)
-        if (!this.shouldSkipReEnter(pluginPath, featureCode)) {
-          console.log('[Plugin] 单例分离窗口重入，触发 onPluginEnter:', { pluginPath, featureCode })
-          const enterPayload = this.assemblyCoordinator.buildEnterPayload(
-            api.getLaunchParam() as EnterPayload
-          )
-          await this.assemblyCoordinator.dispatchLifecycleEvent(
-            detachedView,
-            'PluginEnter',
-            enterPayload
-          )
-          this.recordEnterState(pluginPath, featureCode)
-        } else {
-          console.log('[Plugin] 单例分离窗口同文本指令重入，仅聚焦:', pluginPath)
-        }
-        this.assemblyCoordinator.abortCurrentSession('singleton-focus-detached')
-        return
-      }
     }
 
     // 先尝试从缓存中复用已有视图
@@ -1521,30 +1557,8 @@ export class PluginManager {
     try {
       console.log('[Plugin] 直接在独立窗口中创建插件:', { pluginPath, featureCode })
 
-      // 单例检查：插件不允许多开 且 已有分离窗口 → 聚焦已有窗口，按需触发 onPluginEnter
-      if (!this.isPluginMultiOpenAllowed(pluginPath)) {
-        const detachedView = detachedWindowManager.getViewByPlugin(pluginPath)
-        if (detachedView) {
-          detachedWindowManager.focusByPlugin(pluginPath)
-          if (!this.shouldSkipReEnter(pluginPath, featureCode)) {
-            console.log('[Plugin] 独立窗口单例重入，触发 onPluginEnter:', {
-              pluginPath,
-              featureCode
-            })
-            const enterPayload = this.assemblyCoordinator.buildEnterPayload(
-              api.getLaunchParam() as EnterPayload
-            )
-            await this.assemblyCoordinator.dispatchLifecycleEvent(
-              detachedView,
-              'PluginEnter',
-              enterPayload
-            )
-            this.recordEnterState(pluginPath, featureCode)
-          } else {
-            console.log('[Plugin] 独立窗口单例同文本指令重入，仅聚焦:', pluginPath)
-          }
-          return { success: true }
-        }
+      if (await this.reuseDetachedSingletonIfExists(pluginPath, featureCode, 'detached-window')) {
+        return { success: true }
       }
 
       const pluginInfoFromDB = this.fetchPluginInfoFromDB(pluginPath)

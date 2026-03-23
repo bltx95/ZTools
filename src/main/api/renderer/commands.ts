@@ -395,6 +395,25 @@ export class AppsAPI {
             }
           }
 
+          // 先预检查目标插件是否已在分离窗口中运行。
+          // 这里必须发生在主窗口 show / placeholder 之前，否则“只是聚焦已有分离窗口”的场景也会把主窗口 UI 弄脏。
+          const reusedDetached =
+            typeof (this.pluginManager as any).reuseDetachedSingletonIfExists === 'function'
+              ? await (this.pluginManager as any).reuseDetachedSingletonIfExists(
+                  appPath,
+                  featureCode || '',
+                  'launch-precheck'
+                )
+              : false
+
+          if (reusedDetached) {
+            console.log('[Commands] 目标插件已在分离窗口运行，跳过主窗口占位态:', {
+              path: appPath,
+              featureCode
+            })
+            return { success: true }
+          }
+
           if (shouldAutoDetach) {
             // 直接在独立窗口中创建插件
             const result = await this.pluginManager.createPluginInDetachedWindow(
